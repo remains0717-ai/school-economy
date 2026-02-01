@@ -263,5 +263,95 @@ span {
     font-size: 0.9em;
 }
 
+/* Bank UI Styles */
+.bank-container {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.bank-info-card {
+    background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+    padding: 30px;
+    border-radius: 12px;
+    border: 1px solid #444;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.balance-display h3 {
+    color: #888;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+.balance-display p {
+    font-size: 2.5em;
+    font-weight: bold;
+    color: #00ffdd;
+    margin: 10px 0;
+    text-shadow: 0 0 15px rgba(0, 255, 221, 0.3);
+}
+
+.balance-display small {
+    color: #666;
+}
+
+.bank-controls {
+    background-color: #1a1a1a;
+    padding: 25px;
+    border-radius: 12px;
+    border: 1px solid #444;
+}
+
+.bank-controls .input-group {
+    margin-bottom: 20px;
+}
+
+.bank-controls label {
+    display: block;
+    margin-bottom: 10px;
+    color: #888;
+}
+
+.bank-controls input {
+    width: 100%;
+    background: #2b2b2b;
+    border: 1px solid #444;
+    padding: 15px;
+    border-radius: 8px;
+    color: white;
+    font-size: 1.1em;
+    box-sizing: border-box;
+}
+
+.bank-controls .button-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.bank-controls button {
+    padding: 15px;
+    font-size: 1em;
+}
+
+.bank-controls button.deposit {
+    background-color: #00ffdd;
+    color: #1a1a1a;
+}
+
+.bank-controls button.withdraw {
+    background-color: transparent;
+    border: 2px solid #00ffdd;
+    color: #00ffdd;
+}
+
+.bank-controls button.withdraw:hover {
+    background-color: rgba(0, 255, 221, 0.1);
+}
+
 .up-trend { color: #ff4d4d; }
 .down-trend { color: #4d79ff; }

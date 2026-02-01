@@ -202,7 +202,9 @@ class EconomicSimulation {
         this.price = 10;
         this.productionCost = 50;
 
-        // Stock Market Data
+        // Bank and Stock Market Data
+        this.bankBalance = 0;
+        this.interestRate = 0.025; // 2.5% per tick
         this.portfolio = {}; // { 'AAPL': { amount: 10, avgPrice: 150 } }
         this.currentStockSymbol = null;
         this.currentStockPrice = 0;
@@ -215,6 +217,10 @@ class EconomicSimulation {
         this.actionsPanel.shadowRoot.getElementById('produce-btn').addEventListener('click', () => this.produce());
         this.actionsPanel.shadowRoot.getElementById('trade-btn').addEventListener('click', () => this.sell());
 
+        // Bank Events
+        document.getElementById('deposit-btn').addEventListener('click', () => this.deposit());
+        document.getElementById('withdraw-btn').addEventListener('click', () => this.withdraw());
+
         // Stock UI Events
         document.getElementById('load-stock-btn').addEventListener('click', () => this.loadStock());
         document.getElementById('buy-stock-btn').addEventListener('click', () => this.buyStock());
@@ -223,6 +229,49 @@ class EconomicSimulation {
         this.updateUI();
         setInterval(() => this.updateMarket(), 2000);
         setInterval(() => this.updateSimulationStockPrices(), 5000);
+        setInterval(() => this.calculateInterest(), 10000); // Calculate interest every 10 seconds
+    }
+
+    // Bank Logic
+    deposit() {
+        const amount = parseInt(document.getElementById('bank-amount').value);
+        if (isNaN(amount) || amount <= 0) return;
+
+        if (this.cash >= amount) {
+            this.cash -= amount;
+            this.bankBalance += amount;
+            this.logPanel.addMessage(`은행에 ₩${amount.toLocaleString()}을 예금했습니다.`);
+            document.getElementById('bank-amount').value = '';
+            this.updateUI();
+        } else {
+            this.logPanel.addMessage('보유 현금이 부족하여 예금할 수 없습니다.');
+        }
+    }
+
+    withdraw() {
+        const amount = parseInt(document.getElementById('bank-amount').value);
+        if (isNaN(amount) || amount <= 0) return;
+
+        if (this.bankBalance >= amount) {
+            this.bankBalance -= amount;
+            this.cash += amount;
+            this.logPanel.addMessage(`은행에서 ₩${amount.toLocaleString()}을 출금했습니다.`);
+            document.getElementById('bank-amount').value = '';
+            this.updateUI();
+        } else {
+            this.logPanel.addMessage('예금 잔액이 부족하여 출금할 수 없습니다.');
+        }
+    }
+
+    calculateInterest() {
+        if (this.bankBalance > 0) {
+            const interest = Math.floor(this.bankBalance * this.interestRate);
+            if (interest > 0) {
+                this.bankBalance += interest;
+                this.logPanel.addMessage(`은행 이자가 ₩${interest.toLocaleString()} 발생했습니다.`);
+                this.updateUI();
+            }
+        }
     }
 
     produce() {
@@ -346,22 +395,26 @@ class EconomicSimulation {
     }
 
     updateUI() {
-        if (this.resourcesPanel) this.resourcesPanel.update(this.cash, this.goods);
+        if (this.resourcesPanel) this.resourcesPanel.update(Math.floor(this.cash), this.goods);
         if (this.marketPanel) this.marketPanel.update(this.price);
 
         // Update Home View
         document.getElementById('current-cash').textContent = Math.floor(this.cash).toLocaleString();
+        document.getElementById('current-bank-balance').textContent = Math.floor(this.bankBalance).toLocaleString();
         document.getElementById('current-goods').textContent = this.goods;
         
         let stockValue = 0;
         for (const sym in this.portfolio) {
-            // In a real app, we'd fetch current prices for each sym
-            // For now, we use currentStockPrice if it matches or a cached one
             stockValue += this.portfolio[sym].amount * (sym === this.currentStockSymbol ? this.currentStockPrice : this.portfolio[sym].avgPrice);
         }
         
         document.getElementById('current-stock-value').textContent = Math.floor(stockValue).toLocaleString();
-        document.getElementById('total-assets').textContent = Math.floor(this.cash + stockValue).toLocaleString();
+        const totalAssets = this.cash + this.bankBalance + stockValue;
+        document.getElementById('total-assets').textContent = Math.floor(totalAssets).toLocaleString();
+
+        // Update Bank View
+        const bankBalanceEl = document.getElementById('bank-balance-amount');
+        if (bankBalanceEl) bankBalanceEl.textContent = Math.floor(this.bankBalance).toLocaleString();
 
         // Update Stock Trading View
         if (this.currentStockSymbol) {

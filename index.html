@@ -29,15 +29,35 @@
             <div id="home-view" class="view active">
                 <h2>현재 자산 현황</h2>
                 <div class="asset-status">
-                    <p>현금: <span id="current-cash">0</span></p>
-                    <p>상품: <span id="current-goods">0</span></p>
+                    <p>보유 현금: <span id="current-cash">0</span></p>
+                    <p>은행 예금: <span id="current-bank-balance">0</span></p>
+                    <p>상품 자산: <span id="current-goods">0</span></p>
                     <p>주식 평가액: <span id="current-stock-value">0</span></p>
-                    <p>총 자산: <span id="total-assets">0</span></p>
+                    <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+                    <p style="font-size: 1.4em; color: #00ffdd;">총 자산: <span id="total-assets">0</span></p>
                 </div>
             </div>
             <div id="bank-view" class="view">
-                <h2>은행</h2>
-                <p>은행 관련 기능이 여기에 표시됩니다.</p>
+                <h2>중앙 은행</h2>
+                <div class="bank-container">
+                    <div class="bank-info-card">
+                        <div class="balance-display">
+                            <h3>나의 예금 잔액</h3>
+                            <p>₩ <span id="bank-balance-amount">0</span></p>
+                            <small>연 이자율: 2.5% (시뮬레이션 시간 기준)</small>
+                        </div>
+                    </div>
+                    <div class="bank-controls">
+                        <div class="input-group">
+                            <label for="bank-amount">거래 금액</label>
+                            <input type="number" id="bank-amount" placeholder="금액을 입력하세요" min="1">
+                        </div>
+                        <div class="button-group">
+                            <button id="deposit-btn" class="deposit">입금하기</button>
+                            <button id="withdraw-btn" class="withdraw">출금하기</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div id="stock-trading-view" class="view">
                 <h2>모의 주식 투자</h2>
