@@ -217,12 +217,19 @@ class AuthManager {
 
         document.getElementById('signup-role').addEventListener('change', (e) => {
             const emailInput = document.getElementById('signup-email');
+            const usernameContainer = document.getElementById('signup-username-container');
+            const usernameInput = document.getElementById('signup-username');
+
             if (e.target.value === 'admin') {
                 emailInput.classList.remove('hidden');
                 emailInput.required = true;
+                usernameContainer.classList.add('hidden');
+                usernameInput.required = false;
             } else {
                 emailInput.classList.add('hidden');
                 emailInput.required = false;
+                usernameContainer.classList.remove('hidden');
+                usernameInput.required = true;
             }
         });
 
@@ -362,13 +369,18 @@ class AuthManager {
 
     async signup() {
         const role = document.getElementById('signup-role').value;
-        const username = document.getElementById('signup-username').value.trim().toLowerCase();
         const pass = document.getElementById('signup-password').value;
         const adminEmail = document.getElementById('signup-email').value.trim();
+        let username = document.getElementById('signup-username').value.trim().toLowerCase();
 
         if (pass.length < 6) {
             alert('비밀번호는 최소 6자 이상이어야 합니다.');
             return;
+        }
+
+        // 관리자는 이메일 앞부분을 아이디로 자동 설정
+        if (role === 'admin') {
+            username = adminEmail.split('@')[0];
         }
 
         const email = role === 'admin' ? adminEmail : `${username}@school-economy.local`;
@@ -380,9 +392,7 @@ class AuthManager {
             let classCode = null;
             if (role === 'admin') {
                 classCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-                document.getElementById('generated-code').textContent = classCode;
-                document.getElementById('class-code-display').classList.remove('hidden');
-                alert(`회원가입 완료! 관리자 학급 코드는 [${classCode}] 입니다. 학생들에게 공유해주세요.`);
+                // Firestore 저장 전에 알림을 띄우지 않고, 저장 후 닫기 직전에 띄웁니다.
             }
 
             await db.collection('users').doc(user.uid).set({
@@ -402,11 +412,11 @@ class AuthManager {
 
             if (role === 'student') {
                 alert('회원가입이 완료되었습니다! 로그인해 주세요.');
-                this.closeModal();
             } else {
-                alert(`회원가입 완료! 관리자 학급 코드는 [${classCode}] 입니다. 학생들에게 공유해주세요.`);
-                this.closeModal(); // 명시적으로 즉시 닫기
+                alert(`회원가입 완료! 관리자 계정은 이메일로 로그인하세요.\n학급 코드: [${classCode}] (내 정보에서 확인 가능)`);
             }
+            
+            this.closeModal(); // 모든 경우에 확실히 닫기
         } catch (error) {
             let msg = '회원가입 실패: ' + error.message;
             if (error.code === 'auth/email-already-in-use') msg = '이미 사용 중인 아이디 또는 이메일입니다.';
