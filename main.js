@@ -94,7 +94,15 @@ class AuthManager {
             if (doc.exists) {
                 window.userState.classData = doc.data();
                 this.updateClassUI();
-                if (window.userState.currentUser?.role === 'admin') this.loadAdminLists();
+                
+                // 상점 로드 (공통)
+                loadStudentShop(code);
+
+                if (window.userState.currentUser?.role === 'admin') {
+                    this.loadAdminLists();
+                    loadTreasuryLogs(code);
+                    loadAdminShopItems(code);
+                }
             }
         });
     }
@@ -408,11 +416,35 @@ class EconomicSimulation {
             this.loadDeposits();
             this.loadLoans();
             this.loadPortfolio();
+            this.loadInventory();
             this.initTradingView();
             this.setupTradeListeners();
         }
         
         if (this.currentStock) this.updateTradeSummary();
+    }
+
+    loadInventory() {
+        db.collection('users').doc(this.user.uid).collection('inventory').orderBy('timestamp', 'desc').onSnapshot(snap => {
+            const grid = document.getElementById('home-inventory-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            snap.forEach(doc => {
+                const item = doc.data();
+                const div = document.createElement('div');
+                div.className = 'inventory-item';
+                div.innerHTML = `
+                    <span>${item.itemName}</span>
+                    <small style="color:#666;">₩ ${item.price.toLocaleString()}</small>
+                `;
+                grid.appendChild(div);
+            });
+
+            if (snap.empty) {
+                grid.innerHTML = '<p style="color:#666; grid-column: 1/-1;">보유 중인 아이템이 없습니다.</p>';
+            }
+        });
     }
 
     loadPortfolio() {
@@ -582,6 +614,35 @@ class EconomicSimulation {
             alert(`${this.tradeMode === 'buy' ? '매수' : '매도'} 완료!`);
             this.selectStock(symbol, this.currentStock.name); // UI 갱신
         } catch (err) { alert(err.message); }
+    }
+
+    async buyItem(itemId, itemName, price, currentStock) {
+        if (this.user.balance < price) return alert(`현금이 부족합니다!\n(필요: ₩${price.toLocaleString()} / 현재: ₩${this.user.balance.toLocaleString()})`);
+        if (currentStock <= 0) return alert("재고가 없습니다.");
+
+        if (!confirm(`[${itemName}]을 ₩${price.toLocaleString()}에 구매하시겠습니까?`)) return;
+
+        try {
+            const userRef = db.collection('users').doc(this.user.uid);
+            const itemRef = db.collection('items').doc(itemId);
+            const invRef = userRef.collection('inventory').doc();
+
+            await db.runTransaction(async (t) => {
+                const iDoc = await t.get(itemRef);
+                const iData = iDoc.data();
+                
+                if (iData.stock <= 0) throw new Error("방금 물건이 품절되었습니다.");
+
+                t.update(userRef, { balance: firebase.firestore.FieldValue.increment(-price) });
+                t.update(itemRef, { stock: firebase.firestore.FieldValue.increment(-1) });
+                t.set(invRef, {
+                    itemName,
+                    price,
+                    timestamp: firebase.firestore.Timestamp.now()
+                });
+            });
+            alert("구매가 완료되었습니다! 가방에서 확인하세요.");
+        } catch (err) { alert("구매 실패: " + err.message); }
     }
 
     async deposit() {
@@ -799,6 +860,123 @@ class EconomicSimulation {
 }
 
 // [Global Admin Functions]
+window.addShopItem = async () => {
+    const category = document.getElementById('new-item-category').value.trim();
+    const name = document.getElementById('new-item-name').value.trim();
+    const price = parseInt(document.getElementById('new-item-price').value);
+    const stock = parseInt(document.getElementById('new-item-stock').value);
+
+    if (!category || !name || isNaN(price) || isNaN(stock)) return alert("모든 정보를 올바르게 입력하세요.");
+
+    const code = (window.userState.currentUser.classCode || window.userState.currentUser.adminCode).trim().toUpperCase();
+
+    try {
+        await db.collection('items').add({
+            classCode: code,
+            category,
+            name,
+            price,
+            stock,
+            createdAt: firebase.firestore.Timestamp.now()
+        });
+        alert("물품이 등록되었습니다.");
+        document.getElementById('new-item-category').value = '';
+        document.getElementById('new-item-name').value = '';
+        document.getElementById('new-item-price').value = '';
+        document.getElementById('new-item-stock').value = '';
+    } catch (err) { alert("등록 실패: " + err.message); }
+};
+
+window.deleteShopItem = async (itemId) => {
+    if (!confirm("정말로 이 물품을 삭제하시겠습니까?")) return;
+    try {
+        await db.collection('items').doc(itemId).delete();
+        alert("삭제되었습니다.");
+    } catch (err) { alert("삭제 실패: " + err.message); }
+};
+
+function loadAdminShopItems(code) {
+    db.collection('items').where('classCode', '==', code).orderBy('createdAt', 'desc').onSnapshot(snap => {
+        const body = document.getElementById('admin-shop-list-body');
+        if (!body) return;
+        body.innerHTML = '';
+        
+        snap.forEach(doc => {
+            const item = doc.data();
+            body.innerHTML += `<tr>
+                <td>${item.category}</td>
+                <td><strong>${item.name}</strong></td>
+                <td>₩${item.price.toLocaleString()}</td>
+                <td>${item.stock} 개</td>
+                <td><button onclick="window.deleteShopItem('${doc.id}')" style="background:var(--danger); font-size:0.8rem;">삭제</button></td>
+            </tr>`;
+        });
+    });
+}
+
+function loadStudentShop(code) {
+    db.collection('items').where('classCode', '==', code).onSnapshot(snap => {
+        const grid = document.getElementById('shop-items-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        snap.forEach(doc => {
+            const item = doc.data();
+            const card = document.createElement('div');
+            card.className = 'item-card';
+            card.innerHTML = `
+                <small style="color:#888;">${item.category}</small>
+                <h3 style="margin:5px 0;">${item.name}</h3>
+                <span class="item-price">₩ ${item.price.toLocaleString()}</span>
+                <p style="font-size:0.9rem; color:${item.stock > 0 ? '#00ffdd' : 'var(--danger)'};">
+                    재고: ${item.stock > 0 ? item.stock + '개' : '품절'}
+                </p>
+                <button onclick="window.simulation.buyItem('${doc.id}', '${item.name}', ${item.price}, ${item.stock})" 
+                        class="submit-btn" 
+                        ${item.stock <= 0 ? 'disabled style="background:#444;"' : ''}>
+                    ${item.stock > 0 ? '구매하기' : '품절'}
+                </button>
+            `;
+            grid.appendChild(card);
+        });
+
+        if (snap.empty) {
+            grid.innerHTML = '<p style="grid-column: 1/-1; text-align:center; color:#666; padding:40px;">현재 판매 중인 물품이 없습니다.</p>';
+        }
+    });
+}
+
+window.issueCurrency = async () => {
+    const input = document.getElementById('issue-amount');
+    const amount = parseInt(input.value);
+    if (isNaN(amount) || amount <= 0) return alert("발행할 올바른 금액을 입력하세요.");
+
+    const u = window.userState.currentUser;
+    const code = (u.classCode || u.adminCode).trim().toUpperCase();
+    
+    if (!confirm(`신규 화폐 ₩${amount.toLocaleString()}을 발행하시겠습니까?\n발행 후 국고 잔액에 즉시 합산됩니다.`)) return;
+
+    try {
+        const batch = db.batch();
+        const classRef = db.collection('classes').doc(code);
+        
+        batch.update(classRef, { treasury: firebase.firestore.FieldValue.increment(amount) });
+        
+        // 국고 변동 로그 기록
+        const logRef = classRef.collection('treasuryLogs').doc();
+        batch.set(logRef, {
+            type: 'issuance',
+            amount: amount,
+            description: '신규 화폐 발행 (중앙은행)',
+            timestamp: firebase.firestore.Timestamp.now()
+        });
+
+        await batch.commit();
+        alert("화폐 발행이 완료되었습니다.");
+        input.value = '';
+    } catch (err) { alert("발행 실패: " + err.message); }
+};
+
 window.adjustTreasury = async (mode) => {
     const input = document.getElementById('adj-treasury-amount');
     const amount = parseInt(input.value);
@@ -815,6 +993,27 @@ window.adjustTreasury = async (mode) => {
         input.value = '';
     } catch (err) { alert(err.message); }
 };
+
+function loadTreasuryLogs(code) {
+    db.collection('classes').doc(code).collection('treasuryLogs').orderBy('timestamp', 'desc').limit(50).onSnapshot(snap => {
+        const logList = document.getElementById('treasury-logs');
+        if (!logList) return;
+        logList.innerHTML = '';
+        
+        snap.forEach(doc => {
+            const l = doc.data();
+            const date = l.timestamp ? l.timestamp.toDate().toLocaleString() : '-';
+            const color = l.type === 'issuance' ? 'var(--secondary)' : (l.amount < 0 ? 'var(--danger)' : 'var(--primary)');
+            const sign = l.amount > 0 ? '+' : '';
+            
+            logList.innerHTML += `<li style="margin-bottom:8px; border-bottom:1px solid #222; padding-bottom:5px;">
+                <small style="color:#666;">[${date}]</small><br>
+                <span style="color:${color}; font-weight:bold;">${l.description}</span>: 
+                <span style="color:${color}">${sign}${l.amount.toLocaleString()}</span>
+            </li>`;
+        });
+    });
+}
 
 window.adjustDebt = async (mode) => {
     const input = document.getElementById('adj-debt-amount');
