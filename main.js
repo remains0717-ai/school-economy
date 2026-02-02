@@ -175,6 +175,12 @@ class AuthManager {
                         const userData = doc.data();
                         window.userState.currentUser = { uid: user.uid, ...userData };
                         window.userState.isLoggedIn = true;
+                        
+                        // [안전 장치] 관리자인데 adminCode가 없으면 classCode로 채워줌
+                        if (userData.role === 'admin' && !userData.adminCode && userData.classCode) {
+                            db.collection('users').doc(user.uid).update({ adminCode: userData.classCode });
+                        }
+
                         this.updateUI();
                         this.simulation.sync(window.userState.currentUser);
                         
@@ -295,7 +301,7 @@ class AuthManager {
             this.adminListUnsub = null;
         }
 
-        // [1] 모든 계정 목록 (onSnapshot으로 실시간 연동)
+        // [1] 해당 코드를 가진 모든 사용자 (관리자 본인 포함) 목록
         this.adminListUnsub = db.collection('users').where('adminCode','==',code).onSnapshot(async snap => {
             const assetBody = document.getElementById('asset-mgmt-body');
             const accBody = document.getElementById('student-list-body');
@@ -305,27 +311,26 @@ class AuthManager {
             if (assetBody) assetBody.innerHTML = '';
             if (jobBody) jobBody.innerHTML = '';
 
-            // 실시간 주가 정보를 한 번만 가져오기 위해 공통 심볼 목록 추출
-            const allSymbols = new Set();
-            
             snap.forEach(doc => {
                 const d = doc.data();
                 const uid = doc.id;
+                const isMe = uid === window.userState.currentUser?.uid;
+                const displayName = (d.nickname || d.username) + (isMe ? " (나)" : "");
 
-                // [학생 관리 탭]
+                // [계정 관리 탭]
                 if (accBody) {
                     const status = d.isAuthorized ? '<span style="color:var(--primary)">승인됨</span>' : '<span style="color:var(--danger)">미승인</span>';
                     const btnText = d.isAuthorized ? "승인 취소" : "승인 하기";
                     const btnColor = d.isAuthorized ? "var(--danger)" : "var(--primary)";
-                    accBody.innerHTML += `<tr><td>${d.username}</td><td>${status}</td><td><button onclick="window.toggleApproval('${uid}', ${!d.isAuthorized})" style="background:${btnColor}">${btnText}</button></td></tr>`;
+                    accBody.innerHTML += `<tr><td>${displayName}</td><td>${status}</td><td><button onclick="window.toggleApproval('${uid}', ${!d.isAuthorized})" style="background:${btnColor}">${btnText}</button></td></tr>`;
                 }
 
                 // [직업 관리 탭]
                 if (jobBody) {
-                    jobBody.innerHTML += `<tr><td><input type="checkbox" class="job-checkbox" value="${uid}"></td><td>${d.nickname||d.username}</td><td><input type="text" value="${d.job||''}" class="job-input" style="width:80px"></td><td><input type="number" value="${d.salary||0}" class="salary-input" style="width:80px"></td><td><button onclick="window.updateJobInfo('${uid}', this)">저장</button></td></tr>`;
+                    jobBody.innerHTML += `<tr><td><input type="checkbox" class="job-checkbox" value="${uid}"></td><td>${displayName}</td><td><input type="text" value="${d.job||''}" class="job-input" style="width:80px"></td><td><input type="number" value="${d.salary||0}" class="salary-input" style="width:80px"></td><td><button onclick="window.updateJobInfo('${uid}', this)">저장</button></td></tr>`;
                 }
 
-                // [자산 관리 탭] 초기 로딩 (주식 제외)
+                // [자산 관리 탭]
                 if (assetBody) {
                     const balance = Number(d.balance || 0);
                     const bankBalance = Number(d.bankBalance || 0);
@@ -334,7 +339,7 @@ class AuthManager {
                     const rowId = `asset-row-${uid}`;
                     assetBody.innerHTML += `<tr id="${rowId}">
                         <td><input type="checkbox" class="student-checkbox" value="${uid}"></td>
-                        <td>${d.nickname||d.username}</td>
+                        <td>${displayName}</td>
                         <td style="color:var(--primary)">₩${balance.toLocaleString()}</td>
                         <td>₩${bankBalance.toLocaleString()}</td>
                         <td class="stock-cell" style="color:var(--secondary)">계산중...</td>
@@ -343,7 +348,6 @@ class AuthManager {
                         <td><button onclick="window.openModifyModal('${uid}','${d.username}',${balance})">수정</button></td>
                     </tr>`;
 
-                    // 각 학생의 주식 정보 업데이트를 비동기로 실행
                     this.updateStudentStockAsset(uid, balance, bankBalance, debt);
                 }
             });
@@ -604,20 +608,34 @@ class EconomicSimulation {
         if (!config.refundEnabled) return alert("현재 학급 상점에서 환불 기능이 비활성화되어 있습니다.");
 
         if (quantity < 1 || quantity > allItemIds.length) return alert("수량이 올바르지 않습니다.");
-        if (!confirm(`[${itemName}] ${quantity}개를 환불하시겠습니까?\n총 ₩${totalRefund.toLocaleString()}이 즉시 입금됩니다.`)) return;
+        if (!confirm(`[${itemName}] ${quantity}개를 환불하시겠습니까?\n총 ₩${totalRefund.toLocaleString()}이 국고에서 환급됩니다.`)) return;
 
         try {
             const userRef = db.collection('users').doc(this.user.uid);
-            const selectedIds = allItemIds.slice(0, quantity); // 정확히 선택한 수량만큼만 추출
+            const classCode = (this.user.classCode || this.user.adminCode).trim().toUpperCase();
+            const classRef = db.collection('classes').doc(classCode);
+            const selectedIds = allItemIds.slice(0, quantity);
 
             await db.runTransaction(async (t) => {
-                // 선택된 ID들에 대해서만 삭제 수행
-                for (const id of selectedIds) {
-                    const invRef = userRef.collection('inventory').doc(id);
-                    t.delete(invRef);
-                }
-                // 입금액도 개수에 맞게 계산
+                const cDoc = await t.get(classRef);
+                if (cDoc.data().treasury < totalRefund) throw new Error("국고 잔액이 부족하여 환불이 불가능합니다.");
+
+                // 1. 사용자 잔액 증가
                 t.update(userRef, { balance: firebase.firestore.FieldValue.increment(totalRefund) });
+                // 2. 국고 잔액 차감 (지출)
+                t.update(classRef, { treasury: firebase.firestore.FieldValue.increment(-totalRefund) });
+                // 3. 국고 변동 로그 기록
+                const tLogRef = classRef.collection('treasuryLogs').doc();
+                t.set(tLogRef, {
+                    type: 'expense',
+                    amount: -totalRefund,
+                    description: `상점 물품 환불: ${itemName} ${quantity}개`,
+                    timestamp: firebase.firestore.Timestamp.now()
+                });
+                // 4. 인벤토리에서 삭제
+                for (const id of selectedIds) {
+                    t.delete(userRef.collection('inventory').doc(id));
+                }
             });
 
             alert(`${quantity}개의 물품 환불이 완료되었습니다.`);
