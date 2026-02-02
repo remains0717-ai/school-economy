@@ -255,15 +255,13 @@
                 
                 <div class="stock-container">
                     <!-- 위쪽: 가로로 넓은 차트 -->
-                    <div class="asset-status" style="margin-top:0; padding: 15px;">
-                        <div style="display:flex; gap:10px; margin-bottom:15px; max-width: 500px;">
+                    <div class="asset-status" style="margin-top:0; padding: 10px;">
+                        <div style="display:flex; gap:10px; margin-bottom:10px; max-width: 500px;">
                             <input type="text" id="stock-search-input" placeholder="종목 코드 입력 (예: AAPL, TSLA, BTCUSD)" style="flex:1">
                             <button id="search-stock-btn" class="auth-btn" style="width:80px;">검색</button>
                         </div>
-                        <!-- TradingView 차트 위젯 -->
-                        <div id="tradingview_widget_container" style="height: 750px; border-radius: 10px; overflow: hidden; border: 1px solid #333;">
-                            <div id="tradingview_chart"></div>
-                        </div>
+                        <!-- TradingView 차트 위젯 (높이를 직접 지정하여 꽉 채움) -->
+                        <div id="tradingview_chart" style="height: 750px; border-radius: 10px; overflow: hidden; border: 1px solid #333;"></div>
                     </div>
 
                     <!-- 아래쪽: 가로형 매수/매도 주문 패널 -->
