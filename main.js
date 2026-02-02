@@ -871,6 +871,8 @@ class EconomicSimulation {
         try {
             const userRef = db.collection('users').doc(this.user.uid);
             const itemRef = db.collection('items').doc(itemId);
+            const classCode = (this.user.classCode || this.user.adminCode).trim().toUpperCase();
+            const classRef = db.collection('classes').doc(classCode);
 
             await db.runTransaction(async (t) => {
                 const iDoc = await t.get(itemRef);
@@ -878,10 +880,23 @@ class EconomicSimulation {
                 
                 if (iData.stock < quantity) throw new Error("방금 물건이 품절되었거나 재고가 부족해졌습니다.");
 
+                // 1. 사용자 잔액 차감
                 t.update(userRef, { balance: firebase.firestore.FieldValue.increment(-totalCost) });
+                // 2. 상점 재고 차감
                 t.update(itemRef, { stock: firebase.firestore.FieldValue.increment(-quantity) });
+                // 3. 학급 국고 입금 (신규)
+                t.update(classRef, { treasury: firebase.firestore.FieldValue.increment(totalCost) });
                 
-                // 수량만큼 인벤토리 아이템 생성
+                // 4. 국고 변동 로그 기록 (신규)
+                const tLogRef = classRef.collection('treasuryLogs').doc();
+                t.set(tLogRef, {
+                    type: 'revenue',
+                    amount: totalCost,
+                    description: `상점 판매 수입: ${itemName} ${quantity}개`,
+                    timestamp: firebase.firestore.Timestamp.now()
+                });
+
+                // 5. 수량만큼 인벤토리 아이템 생성
                 for (let i = 0; i < quantity; i++) {
                     const invRef = userRef.collection('inventory').doc();
                     t.set(invRef, {
