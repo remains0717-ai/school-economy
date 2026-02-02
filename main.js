@@ -284,15 +284,25 @@ class AuthManager {
     listenToAuthChanges() {
         auth.onAuthStateChanged(async (user) => {
             if (user) {
-                const userDoc = await db.collection('users').doc(user.uid).get();
-                const userData = userDoc.data();
-                this.currentUser = { 
-                    uid: user.uid, 
-                    username: userData?.username || user.email.split('@')[0], 
-                    role: userData?.role || 'student',
-                    classCode: userData?.classCode || null
-                };
-                this.simulation.loadUserData(user.uid);
+                try {
+                    const userDoc = await db.collection('users').doc(user.uid).get();
+                    if (userDoc.exists) {
+                        const userData = userDoc.data();
+                        this.currentUser = { 
+                            uid: user.uid, 
+                            username: userData.username, 
+                            role: userData.role,
+                            classCode: userData.classCode || null
+                        };
+                        this.simulation.loadUserData(user.uid);
+                    } else {
+                        console.error("User document not found in Firestore");
+                        this.currentUser = null;
+                    }
+                } catch (error) {
+                    console.error("Error fetching user data:", error);
+                    this.currentUser = null;
+                }
             } else {
                 this.currentUser = null;
                 this.simulation.resetData();
@@ -309,20 +319,20 @@ class AuthManager {
     closeModal() {
         if (this.modal) this.modal.style.display = 'none';
         
-        // Reset forms safely
         const loginForm = document.getElementById('login-form');
         const signupForm = document.getElementById('signup-form');
         if (loginForm) loginForm.reset();
         if (signupForm) signupForm.reset();
 
-        // Reset UI visibility states
         const signupEmail = document.getElementById('signup-email');
         const signupUsernameContainer = document.getElementById('signup-username-container');
         const classCodeDisplay = document.getElementById('class-code-display');
+        const classCodeContainer = document.getElementById('signup-class-code-container');
 
         if (signupEmail) signupEmail.classList.add('hidden');
         if (signupUsernameContainer) signupUsernameContainer.classList.remove('hidden');
         if (classCodeDisplay) classCodeDisplay.classList.add('hidden');
+        if (classCodeContainer) classCodeContainer.classList.remove('hidden');
     }
 
     switchMode(mode) {
@@ -335,7 +345,6 @@ class AuthManager {
             this.signupContainer.classList.remove('hidden');
             this.toggleText.innerHTML = `이미 계정이 있으신가요? <a href="#" id="toggle-to-login">로그인</a>`;
             
-            // 기본값인 '학생'에 맞춰 학급 코드 칸 보이기
             document.getElementById('signup-class-code-container').classList.remove('hidden');
             document.getElementById('signup-username-container').classList.remove('hidden');
             document.getElementById('signup-email').classList.add('hidden');
@@ -343,18 +352,20 @@ class AuthManager {
         }
         
         const newToggle = mode === 'login' ? document.getElementById('toggle-to-signup') : document.getElementById('toggle-to-login');
-        newToggle.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.switchMode(mode === 'login' ? 'signup' : 'login');
-        });
+        if (newToggle) {
+            newToggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.switchMode(mode === 'login' ? 'signup' : 'login');
+            });
+        }
     }
 
     async login() {
-        const username = document.getElementById('login-username').value.trim().toLowerCase();
+        const username = document.getElementById('login-username').value.trim();
         const pass = document.getElementById('login-password').value;
         
-        const isEmail = username.includes('@');
-        const email = isEmail ? username : `${username}@school-economy.local`;
+        // 아이디에 @가 포함되어 있거나 이미 .local 형식이면 그대로 사용, 아니면 가상 이메일 생성
+        const email = (username.includes('@')) ? username : `${username.toLowerCase()}@school-economy.local`;
 
         try {
             await auth.signInWithEmailAndPassword(email, pass);
