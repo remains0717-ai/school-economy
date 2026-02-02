@@ -416,10 +416,11 @@ class AuthManager {
             return;
         }
 
+        // 학생 가입 시 학급 코드 검증 (classes 컬렉션에서 확인)
         if (role === 'student') {
             try {
-                const adminQuery = await db.collection('users').where('classCode', '==', studentClassCode).get();
-                if (adminQuery.empty) {
+                const classDoc = await db.collection('classes').doc(studentClassCode).get();
+                if (!classDoc.exists) {
                     alert('유효하지 않은 학급 코드입니다. 관리자에게 확인해 주세요.');
                     return;
                 }
@@ -429,6 +430,7 @@ class AuthManager {
             }
         }
 
+        // 관리자는 이메일 앞부분을 아이디로 자동 설정
         if (role === 'admin') {
             if (!adminEmail) {
                 alert('이메일을 입력해 주세요.');
@@ -445,9 +447,17 @@ class AuthManager {
             
             let classCode = null;
             if (role === 'admin') {
+                // 관리자는 새로운 학급 코드 생성 및 classes 컬렉션 등록
                 classCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+                await db.collection('classes').doc(classCode).set({
+                    adminUid: user.uid,
+                    adminEmail: email,
+                    className: `${username} 선생님의 학급`,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
             }
 
+            // 사용자 정보 저장
             await db.collection('users').doc(user.uid).set({
                 username: username,
                 role: role,
