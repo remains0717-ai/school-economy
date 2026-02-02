@@ -265,21 +265,67 @@
             <div id="import-export-view" class="view"><h2>보내기 가져오기</h2><p>준비 중입니다.</p></div>
             <div id="asset-mgmt-view" class="view">
                 <h2>학급 자산 관리</h2>
+                <div class="admin-panel-info" style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <button class="auth-btn" style="background: #ff9800;" onclick="window.batchAction('bonus')">일괄 지원금 (₩1,000)</button>
+                    <button class="auth-btn" style="background: #f44336;" onclick="window.batchAction('reset')">전체 자산 초기화</button>
+                </div>
                 <div class="student-list-container">
                     <table id="asset-mgmt-table">
                         <thead>
                             <tr>
-                                <th>학생 아이디</th>
-                                <th>현금</th>
+                                <th>닉네임(아이디)</th>
+                                <th>현금(잔고)</th>
                                 <th>은행 예금</th>
                                 <th>주식 평가액</th>
                                 <th>총 자산</th>
+                                <th>관리</th>
                             </tr>
                         </thead>
                         <tbody id="asset-mgmt-body">
-                            <!-- 학생 자산 현황 로드 -->
+                            <!-- 실시간 학생 자산 현황 로드 -->
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- 자산 수정 모달 -->
+            <div id="modify-asset-modal" class="modal">
+                <div class="modal-content">
+                    <span class="close-modify-asset" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
+                    <h2>자산 강제 제어</h2>
+                    <p>대상: <span id="modify-target-name" style="color: #00ffdd;"></span></p>
+                    <div class="input-group">
+                        <label>변경할 현금 잔고</label>
+                        <input type="number" id="modify-cash-amount" placeholder="금액 입력">
+                    </div>
+                    <div class="input-group" style="margin-top: 15px;">
+                        <label>수정 사유</label>
+                        <input type="text" id="modify-reason" placeholder="예: 상금 지급, 세금 징수 등">
+                    </div>
+                    <button id="confirm-modify-asset" style="margin-top: 20px; width: 100%;">확인 및 저장</button>
+                </div>
+            </div>
+
+            <!-- 활동 기록 상세 모달 -->
+            <div id="activity-detail-modal" class="modal">
+                <div class="modal-content" style="width: 500px;">
+                    <span class="close-activity-detail" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
+                    <h2>활동 기록 상세</h2>
+                    <p>대상: <span id="activity-target-name" style="color: #00ffdd;"></span></p>
+                    <div style="max-height: 400px; overflow-y: auto; margin-top: 15px;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid #444;">
+                                    <th style="text-align: left; padding: 10px;">일시</th>
+                                    <th style="text-align: left;">종류</th>
+                                    <th style="text-align: right; padding: 10px;">금액</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activity-list-body">
+                                <!-- 활동 내역 로드 -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             <div id="job-mgmt-view" class="view"><h2>직업 관리</h2><p>준비 중입니다.</p></div>

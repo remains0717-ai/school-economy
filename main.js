@@ -450,6 +450,53 @@ class AuthManager {
             tbody.appendChild(tr);
         });
     }
+
+    async loadStudentAssets() {
+        if (!this.currentUser || this.currentUser.role !== 'admin') return;
+        const tbody = document.getElementById('asset-mgmt-body');
+        if (!tbody) return;
+
+        // [실시간 리스너] 학급 학생 목록 감시
+        db.collection('users')
+            .where('role', '==', 'student')
+            .where('adminCode', '==', this.currentUser.classCode)
+            .onSnapshot(async (studentSnapshot) => {
+                tbody.innerHTML = '';
+                for (const studentDoc of studentSnapshot.docs) {
+                    const student = studentDoc.data();
+                    const uid = studentDoc.id;
+                    
+                    // 자산 데이터 실시간으로 가져오기 위해 각 학생별 리스너 대신 정기적 업데이트 또는 호출 방식 사용
+                    const assetDoc = await db.collection('playerData').doc(uid).get();
+                    const assets = assetDoc.exists ? assetDoc.data() : { cash: 0, bankBalance: 0, portfolio: {} };
+
+                    let stockValue = 0;
+                    if (assets.portfolio) {
+                        for (const sym in assets.portfolio) {
+                            const p = assets.portfolio[sym];
+                            const curPrice = (sym === this.simulation.currentStockSymbol ? this.simulation.currentStockPrice : p.avgPrice);
+                            stockValue += p.amount * curPrice;
+                        }
+                    }
+
+                    const total = (assets.cash || 0) + (assets.bankBalance || 0) + stockValue;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${student.nickname || student.username} <small style="color:#666">(${student.username})</small></td>
+                        <td>₩${Math.floor(assets.cash || 0).toLocaleString()}</td>
+                        <td>₩${Math.floor(assets.bankBalance || 0).toLocaleString()}</td>
+                        <td>₩${Math.floor(stockValue).toLocaleString()}</td>
+                        <td style="color: #00ffdd; font-weight: bold;">₩${Math.floor(total).toLocaleString()}</td>
+                        <td>
+                            <button class="auth-btn" style="font-size: 0.7em; padding: 4px 8px;" onclick="window.openModifyModal('${uid}', '${student.nickname || student.username}', ${assets.cash || 0})">수정</button>
+                            <button class="auth-btn" style="font-size: 0.7em; padding: 4px 8px; background: #444;" onclick="window.openActivityModal('${uid}', '${student.nickname || student.username}')">기록</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            });
+    }
 }
 
 function setupNavigation() {
@@ -1000,8 +1047,210 @@ window.deleteStudentAccount = async (uid, username) => {
     }
 };
 
+window.openModifyModal = (uid, name, currentCash) => {
+
+    document.getElementById('modify-target-name').textContent = name;
+
+    document.getElementById('modify-cash-amount').value = currentCash;
+
+    document.getElementById('modify-asset-modal').style.display = 'block';
+
+    window.currentModifyUid = uid;
+
+};
+
+
+
+window.openActivityModal = async (uid, name) => {
+
+    document.getElementById('activity-target-name').textContent = name;
+
+    const tbody = document.getElementById('activity-list-body');
+
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">로딩 중...</td></tr>';
+
+    
+
+    document.getElementById('activity-detail-modal').style.display = 'block';
+
+
+
+    db.collection('playerData').doc(uid).collection('activities')
+
+        .orderBy('timestamp', 'desc')
+
+        .limit(30)
+
+        .get().then(snapshot => {
+
+            tbody.innerHTML = '';
+
+            if (snapshot.empty) {
+
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">기록이 없습니다.</td></tr>';
+
+                return;
+
+            }
+
+            snapshot.forEach(doc => {
+
+                const data = doc.data();
+
+                const tr = document.createElement('tr');
+
+                const time = data.timestamp ? data.timestamp.toDate().toLocaleString() : '-';
+
+                tr.innerHTML = `
+
+                    <td style="padding:10px; font-size:0.8em; color:#888;">${time}</td>
+
+                    <td>${data.type}</td>
+
+                    <td style="text-align:right; padding:10px; color:#00ffdd;">₩${data.amount.toLocaleString()}</td>
+
+                `;
+
+                tbody.appendChild(tr);
+
+            });
+
+        });
+
+};
+
+
+
+window.batchAction = async (type) => {
+
+    if (!window.authManager || !window.authManager.currentUser) return;
+
+    const classCode = window.authManager.currentUser.classCode;
+
+    const actionName = type === 'bonus' ? '지원금 지급' : '자산 초기화';
+
+    
+
+    if (!confirm(`학급 전체 학생에게 [${actionName}]을 진행하시겠습니까?`)) return;
+
+
+
+    try {
+
+        const studentSnapshot = await db.collection('users')
+
+            .where('role', '==', 'student')
+
+            .where('adminCode', '==', classCode)
+
+            .get();
+
+
+
+        const batch = db.batch();
+
+        for (const student of studentSnapshot.docs) {
+
+            const ref = db.collection('playerData').doc(student.id);
+
+            if (type === 'bonus') {
+
+                const doc = await ref.get();
+
+                const currentCash = doc.exists ? doc.data().cash : 0;
+
+                batch.update(ref, { cash: currentCash + 1000 });
+
+            } else {
+
+                batch.set(ref, { cash: 0, bankBalance: 0, portfolio: {}, deposits: [] });
+
+            }
+
+        }
+
+        await batch.commit();
+
+        alert(`${actionName}가 완료되었습니다.`);
+
+    } catch (error) {
+
+        alert('일괄 처리 실패: ' + error.message);
+
+    }
+
+};
+
+
+
 window.addEventListener('load', () => {
+
     setupNavigation();
+
     const simulation = new EconomicSimulation();
-    window.authManager = new AuthManager(simulation); // 전역 변수로 저장
+
+    window.authManager = new AuthManager(simulation);
+
+
+
+    // 모달 닫기 이벤트 등록
+
+    document.querySelector('.close-modify-asset')?.addEventListener('click', () => {
+
+        document.getElementById('modify-asset-modal').style.display = 'none';
+
+    });
+
+    document.querySelector('.close-activity-detail')?.addEventListener('click', () => {
+
+        document.getElementById('activity-detail-modal').style.display = 'none';
+
+    });
+
+    document.getElementById('confirm-modify-asset')?.addEventListener('click', async () => {
+
+        const uid = window.currentModifyUid;
+
+        const newCash = parseInt(document.getElementById('modify-cash-amount').value);
+
+        const reason = document.getElementById('modify-reason').value;
+
+
+
+        if (isNaN(newCash)) return alert('금액을 입력하세요.');
+
+        if (!reason) return alert('수정 사유를 입력하세요.');
+
+
+
+        try {
+
+            await db.collection('playerData').doc(uid).update({ cash: newCash });
+
+            await db.collection('admin_logs').add({
+
+                adminUid: auth.currentUser.uid,
+
+                targetUid: uid,
+
+                amount: newCash,
+
+                reason: reason,
+
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+
+            });
+
+            alert('자산이 수정되었습니다.');
+
+            document.getElementById('modify-asset-modal').style.display = 'none';
+
+        } catch (err) {
+
+            alert('수정 실패: ' + err.message);
+
+        }
+
+    });
+
 });
