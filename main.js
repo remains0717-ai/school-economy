@@ -37,6 +37,12 @@ class AuthManager {
         document.getElementById('signup-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.signup(); });
         document.getElementById('login-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
         
+        document.getElementById('signup-role')?.addEventListener('change', (e) => {
+            const isStudent = e.target.value === 'student';
+            document.getElementById('signup-email')?.classList.toggle('hidden', isStudent);
+            document.getElementById('signup-class-code-container')?.classList.toggle('hidden', !isStudent);
+        });
+
         document.getElementById('selectAllStudents')?.addEventListener('change', (e) => {
             document.querySelectorAll('.student-checkbox').forEach(cb => cb.checked = e.target.checked);
             this.updateSelectedCount();
@@ -328,7 +334,31 @@ class AuthManager {
     }
 
     logout() { auth.signOut().then(() => location.reload()); }
-    openModal(mode) { document.getElementById('auth-modal').style.display='block'; }
+    openModal(mode = 'login') {
+        const modal = document.getElementById('auth-modal');
+        const loginContainer = document.getElementById('login-form-container');
+        const signupContainer = document.getElementById('signup-form-container');
+        const toggleText = document.getElementById('auth-toggle-text');
+
+        if (!modal) return;
+        modal.style.display = 'block';
+        
+        if (mode === 'login') {
+            loginContainer?.classList.remove('hidden');
+            signupContainer?.classList.add('hidden');
+            if (toggleText) {
+                toggleText.innerHTML = '계정이 없으신가요? <a href="#" id="go-signup" style="color:var(--primary); text-decoration:underline; cursor:pointer;">회원가입 하기</a>';
+                document.getElementById('go-signup')?.addEventListener('click', (e) => { e.preventDefault(); this.openModal('signup'); });
+            }
+        } else {
+            loginContainer?.classList.add('hidden');
+            signupContainer?.classList.remove('hidden');
+            if (toggleText) {
+                toggleText.innerHTML = '이미 계정이 있으신가요? <a href="#" id="go-login" style="color:var(--primary); text-decoration:underline; cursor:pointer;">로그인 하기</a>';
+                document.getElementById('go-login')?.addEventListener('click', (e) => { e.preventDefault(); this.openModal('login'); });
+            }
+        }
+    }
     openMyInfo() {
         const u = window.userState.currentUser;
         if (!u) return;
@@ -358,30 +388,6 @@ class EconomicSimulation {
         this.exchangeRate = 1350; // 고정 환율 시뮬레이션
         this.tvWidget = null;
         this.lastStockTotal = 0;
-        
-        // 검색용 종목 마스터 데이터
-        this.stockDictionary = [
-            { symbol: 'NASDAQ:AAPL', name: '애플', keywords: 'apple' },
-            { symbol: 'NASDAQ:TSLA', name: '테슬라', keywords: 'tesla' },
-            { symbol: 'NASDAQ:NVDA', name: '엔비디아', keywords: 'nvidia' },
-            { symbol: 'NASDAQ:MSFT', name: '마이크로소프트', keywords: 'microsoft' },
-            { symbol: 'NASDAQ:AMZN', name: '아마존', keywords: 'amazon' },
-            { symbol: 'NASDAQ:GOOGL', name: '구글', keywords: 'google alphabat 알파벳' },
-            { symbol: 'NASDAQ:META', name: '메타', keywords: 'meta facebook 페이스북' },
-            { symbol: 'NASDAQ:NFLX', name: '넷플릭스', keywords: 'netflix' },
-            { symbol: 'BINANCE:BTCUSDT', name: '비트코인', keywords: 'bitcoin btc' },
-            { symbol: 'BINANCE:ETHUSDT', name: '이더리움', keywords: 'ethereum eth' },
-            { symbol: 'BINANCE:SOLUSDT', name: '솔라나', keywords: 'solana sol' },
-            { symbol: 'BINANCE:XRPUSDT', name: '리플', keywords: 'ripple xrp' },
-            { symbol: 'BINANCE:DOGEUSDT', name: '도지코인', keywords: 'dogecoin doge' },
-            { symbol: 'NYSE:DIS', name: '디즈니', keywords: 'disney' },
-            { symbol: 'NYSE:KO', name: '코카콜라', keywords: 'cocacola coke' },
-            { symbol: 'NASDAQ:SBUX', name: '스타벅스', keywords: 'starbucks' },
-            { symbol: 'NYSE:NKE', name: '나이키', keywords: 'nike' },
-            { symbol: 'NASDAQ:TSM', name: 'TSMC', keywords: 'tsm 반도체' },
-            { symbol: 'KRX:005930', name: '삼성전자', keywords: 'samsung' },
-            { symbol: 'KRX:000660', name: 'SK하이닉스', keywords: 'sk hynix' }
-        ];
     }
 
     initTradingView(symbol = 'NASDAQ:AAPL') {
@@ -438,9 +444,23 @@ class EconomicSimulation {
             this.loadInventory();
             this.initTradingView();
             this.setupTradeListeners();
+            this.setupWidgetBridge();
         }
         
         if (this.currentStock) this.updateTradeSummary();
+    }
+
+    setupWidgetBridge() {
+        // TradingView 차트에서 심볼 변경 감지는 어렵지만, 
+        // 페이지의 클릭 등을 통해 동기화하는 브릿지 로직
+        window.addEventListener('message', (e) => {
+            if (e.data && e.data.name === 'tv-widget-symbol-change') {
+                this.selectStock(e.data.symbol, e.data.symbol.split(':')[1]);
+            }
+        });
+        
+        // 초기 심볼 설정
+        this.selectStock('NASDAQ:AAPL', '애플');
     }
 
     loadInventory() {
@@ -516,23 +536,23 @@ class EconomicSimulation {
         document.getElementById('stock-trade-amount')?.addEventListener('input', () => this.updateTradeSummary());
         document.getElementById('execute-trade-btn')?.addEventListener('click', () => this.executeTrade());
         
-        // 검색창 실시간 연동
-        const searchInput = document.getElementById('stock-search-input');
-        searchInput?.addEventListener('input', () => this.searchStock());
-        searchInput?.addEventListener('focus', () => this.searchStock());
-        
-        // 외부 클릭 시 검색 결과창 닫기
-        window.addEventListener('click', (e) => {
-            if (!e.target.closest('.search-results-box') && e.target.id !== 'stock-search-input') {
-                document.getElementById('stock-search-results')?.classList.add('hidden');
+        // 차트 수동 업데이트를 위한 타이머 (심볼 동기화용)
+        setInterval(() => {
+            const iframe = document.querySelector('#tradingview_chart iframe');
+            if (iframe && iframe.src) {
+                const url = new URL(iframe.src);
+                const symbol = url.searchParams.get('symbol');
+                if (symbol && (!this.currentStock || this.currentStock.symbol !== symbol)) {
+                    this.selectStock(symbol, symbol.split(':')[1]);
+                }
             }
-        });
+        }, 1000);
     }
 
     setTradeMode(mode) {
         this.tradeMode = mode;
         const btn = document.getElementById('execute-trade-btn');
-        const tabs = document.querySelectorAll('.trade-tab');
+        const tabs = document.querySelectorAll('.trade-tab-v2');
         
         tabs.forEach(t => {
             t.classList.toggle('active', t.textContent === (mode === 'buy' ? '매수' : '매도'));
@@ -548,77 +568,15 @@ class EconomicSimulation {
         this.updateTradeSummary();
     }
 
-    async loadTopStocks() {
-        // 인기 종목 기능 삭제됨
-    }
-
-    async searchStock() {
-        const query = document.getElementById('stock-search-input').value.trim().toLowerCase();
-        const resultsBox = document.getElementById('stock-search-results');
-        
-        if (!query) {
-            resultsBox.classList.add('hidden');
-            return;
-        }
-
-        const matches = this.stockDictionary.filter(s => 
-            s.name.includes(query) || 
-            s.symbol.toLowerCase().includes(query) || 
-            s.keywords.includes(query)
-        );
-
-        if (matches.length > 0) {
-            resultsBox.innerHTML = '';
-            matches.forEach(s => {
-                const div = document.createElement('div');
-                div.style.padding = '12px 15px';
-                div.style.cursor = 'pointer';
-                div.style.borderBottom = '1px solid #333';
-                div.style.display = 'flex';
-                div.style.justifyContent = 'space-between';
-                div.style.alignItems = 'center';
-                div.onmouseover = () => div.style.background = 'rgba(255,255,255,0.05)';
-                div.onmouseout = () => div.style.background = 'transparent';
-                
-                div.innerHTML = `
-                    <div>
-                        <strong style="color:var(--primary)">${s.name}</strong>
-                        <br><small style="color:#888;">${s.symbol}</small>
-                    </div>
-                    <span style="font-size:0.8rem; color:#666;">선택</span>
-                `;
-                div.onclick = () => {
-                    this.selectStock(s.symbol, s.name);
-                    document.getElementById('stock-search-input').value = s.name;
-                    resultsBox.classList.add('hidden');
-                };
-                resultsBox.appendChild(div);
-            });
-            resultsBox.classList.remove('hidden');
-        } else {
-            // 매칭되는 항목이 없어도 티커 검색은 허용
-            if (query.length > 2) {
-                resultsBox.innerHTML = `<div style="padding:15px; color:#888; text-align:center;">
-                    '${query.toUpperCase()}' 코드로 직접 검색<br>
-                    <button class="auth-btn" style="margin-top:10px; width:100%;" 
-                            onclick="window.simulation.selectStock('NASDAQ:${query.toUpperCase()}', '${query.toUpperCase()}'); document.getElementById('stock-search-results').classList.add('hidden');">
-                        NASDAQ 코드로 보기
-                    </button>
-                </div>`;
-                resultsBox.classList.remove('hidden');
-            } else {
-                resultsBox.classList.add('hidden');
-            }
-        }
-    }
-
     async selectStock(symbol, name) {
         const price = await this.getStockPrice(symbol);
         this.currentStock = { symbol, name, price };
-        this.updateTradingView(symbol);
         
-        document.getElementById('selected-stock-name').textContent = name;
-        document.getElementById('selected-stock-symbol').textContent = symbol;
+        const nameEl = document.getElementById('selected-stock-name');
+        const symbolEl = document.getElementById('selected-stock-symbol');
+        if (nameEl) nameEl.textContent = name;
+        if (symbolEl) symbolEl.textContent = symbol;
+        
         this.updateTradeSummary();
         
         // 보유 현황 로드
@@ -629,7 +587,7 @@ class EconomicSimulation {
     }
 
     async getStockPrice(symbol) {
-        // 2026-02-02 기준 시장가 근사치 (시연용)
+        // 실제 API 연동이 없으므로 시연용 가격 생성 로직 유지 (심볼별 고정 베이스 가격)
         const basePrices = { 
             AAPL: 245.50, TSLA: 412.30, NVDA: 135.20, MSFT: 425.10, 
             AMZN: 195.80, GOOGL: 188.40, META: 512.60, NFLX: 625.00, 
