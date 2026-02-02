@@ -219,17 +219,23 @@ class AuthManager {
             const emailInput = document.getElementById('signup-email');
             const usernameContainer = document.getElementById('signup-username-container');
             const usernameInput = document.getElementById('signup-username');
+            const classCodeContainer = document.getElementById('signup-class-code-container');
+            const classCodeInput = document.getElementById('signup-class-code');
 
             if (e.target.value === 'admin') {
                 emailInput.classList.remove('hidden');
                 emailInput.required = true;
                 usernameContainer.classList.add('hidden');
                 usernameInput.required = false;
+                classCodeContainer.classList.add('hidden');
+                classCodeInput.required = false;
             } else {
                 emailInput.classList.add('hidden');
                 emailInput.required = false;
                 usernameContainer.classList.remove('hidden');
                 usernameInput.required = true;
+                classCodeContainer.classList.remove('hidden');
+                classCodeInput.required = true;
             }
         });
 
@@ -382,10 +388,20 @@ class AuthManager {
         const pass = document.getElementById('signup-password').value;
         const adminEmail = document.getElementById('signup-email').value.trim();
         let username = document.getElementById('signup-username').value.trim().toLowerCase();
+        const studentClassCode = document.getElementById('signup-class-code').value.trim().toUpperCase();
 
         if (pass.length < 6) {
             alert('비밀번호는 최소 6자 이상이어야 합니다.');
             return;
+        }
+
+        // 학생 가입 시 학급 코드 검증
+        if (role === 'student') {
+            const adminQuery = await db.collection('users').where('classCode', '==', studentClassCode).get();
+            if (adminQuery.empty) {
+                alert('유효하지 않은 학급 코드입니다. 관리자에게 확인해 주세요.');
+                return;
+            }
         }
 
         // 관리자는 이메일 앞부분을 아이디로 자동 설정
@@ -402,14 +418,13 @@ class AuthManager {
             let classCode = null;
             if (role === 'admin') {
                 classCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-                // Firestore 저장 전에 알림을 띄우지 않고, 저장 후 닫기 직전에 띄웁니다.
             }
 
             await db.collection('users').doc(user.uid).set({
                 username: username,
                 role: role,
                 email: email,
-                classCode: classCode,
+                classCode: role === 'admin' ? classCode : studentClassCode,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
@@ -426,11 +441,10 @@ class AuthManager {
                 alert(`회원가입 완료! 관리자 계정은 이메일로 로그인하세요.\n학급 코드: [${classCode}] (내 정보에서 확인 가능)`);
             }
             
-            this.closeModal(); // 모든 경우에 확실히 닫기
+            this.closeModal();
         } catch (error) {
             let msg = '회원가입 실패: ' + error.message;
             if (error.code === 'auth/email-already-in-use') msg = '이미 사용 중인 아이디 또는 이메일입니다.';
-            if (error.code === 'auth/invalid-email') msg = '유효하지 않은 이메일 형식입니다.';
             alert(msg);
         }
     }
@@ -451,6 +465,7 @@ class AuthManager {
         const userDisplay = document.getElementById('user-display-name');
         const roleBadge = document.getElementById('user-role-badge');
         const simulationLink = document.getElementById('simulation-link');
+        const adminMenu = document.getElementById('admin-menu');
 
         if (this.currentUser) {
             loginBtn.classList.add('hidden');
@@ -462,18 +477,47 @@ class AuthManager {
             
             if (this.currentUser.role === 'admin') {
                 simulationLink.classList.remove('hidden');
+                adminMenu.classList.remove('hidden');
+                document.getElementById('mgmt-class-code').textContent = this.currentUser.classCode;
                 if (this.currentUser.classCode) {
                     userDisplay.textContent += ` [코드: ${this.currentUser.classCode}]`;
                 }
+                this.loadStudentList();
             } else {
                 simulationLink.classList.add('hidden');
+                adminMenu.classList.add('hidden');
             }
         } else {
             loginBtn.classList.remove('hidden');
             signupBtn.classList.remove('hidden');
             userInfo.classList.add('hidden');
             simulationLink.classList.add('hidden');
+            adminMenu.classList.add('hidden');
         }
+    }
+
+    async loadStudentList() {
+        if (!this.currentUser || this.currentUser.role !== 'admin') return;
+
+        const tbody = document.getElementById('student-list-body');
+        const snapshot = await db.collection('users')
+            .where('role', '==', 'student')
+            .where('classCode', '==', this.currentUser.classCode)
+            .get();
+
+        tbody.innerHTML = '';
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${data.username}</td>
+                <td>${data.createdAt ? data.createdAt.toDate().toLocaleDateString() : '-'}</td>
+                <td>
+                    <button class="auth-btn" style="font-size: 0.8em; padding: 5px 10px;" onclick="window.deleteStudentAccount('${doc.id}', '${data.username}')">계정 삭제</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
     }
 }
 
@@ -804,6 +848,21 @@ class EconomicSimulation {
         }
     }
 }
+
+window.deleteStudentAccount = async (uid, username) => {
+    if (confirm(`[${username}] 학생의 계정을 삭제하시겠습니까? 학생이 다시 가입해야 합니다.`)) {
+        try {
+            // Note: Cloud Firestore deletion. Actual Auth user deletion requires Admin SDK or Cloud Functions.
+            // For this simulation, we'll mark as deleted or remove from Firestore.
+            await db.collection('users').doc(uid).delete();
+            await db.collection('playerData').doc(uid).delete();
+            alert('계정 정보가 삭제되었습니다.');
+            location.reload(); // Refresh to update list
+        } catch (error) {
+            alert('삭제 실패: ' + error.message);
+        }
+    }
+};
 
 window.addEventListener('load', () => {
     setupNavigation();
