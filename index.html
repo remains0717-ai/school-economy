@@ -413,13 +413,23 @@
                     <div id="item-detail-body" style="margin-top:20px; text-align:center;">
                         <!-- 내용 동적 생성 -->
                     </div>
+
+                    <!-- 수량 선택 (공용) -->
+                    <div id="item-qty-selector" style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.03); border-radius:10px;">
+                        <label style="display:block; margin-bottom:10px; font-size:0.85rem; color:#aaa;">처리 수량</label>
+                        <div style="display:flex; align-items:center; justify-content:center; gap:15px;">
+                            <button onclick="window.adjustItemDetailQty(-1)" class="auth-btn" style="width:40px; margin:0;">-</button>
+                            <input type="number" id="item-detail-qty" value="1" min="1" style="width:80px; text-align:center; font-size:1.2rem; margin:0;">
+                            <button onclick="window.adjustItemDetailQty(1)" class="auth-btn" style="width:40px; margin:0;">+</button>
+                        </div>
+                    </div>
                     
                     <!-- 선물하기 섹션 -->
                     <div id="gift-section" style="margin-top:20px; padding:15px; border-top:1px solid #333; display:none;">
                         <h4 style="color:var(--secondary); margin-bottom:10px;">🎁 아이템 선물하기</h4>
                         <div style="display:flex; gap:10px;">
                             <select id="gift-target-user" style="flex:1;"></select>
-                            <button id="gift-action-btn" class="auth-btn" style="width:80px; margin:0; background:var(--secondary); color:#1a1a1a;">보내기</button>
+                            <button id="gift-action-btn" class="auth-btn" style="width:80px; margin:0; background:var(--secondary); color:#1a1a1a;">선택 수량 선물</button>
                         </div>
                     </div>
 

@@ -594,27 +594,34 @@ class EconomicSimulation {
         });
     }
 
-    async refundItem(itemId, itemName, price) {
+    async refundItem(itemName, price, allItemIds) {
+        const qtyInput = document.getElementById('item-detail-qty');
+        const quantity = parseInt(qtyInput.value) || 1;
+        const totalRefund = price * quantity;
+
         const config = window.userState.classData?.shopConfig || {};
         if (!config.refundEnabled) return alert("현재 학급 상점에서 환불 기능이 비활성화되어 있습니다.");
 
-        if (!confirm(`[${itemName}]을 환불하시겠습니까?\n₩${price.toLocaleString()}이 즉시 입금됩니다.`)) return;
+        if (quantity < 1 || quantity > allItemIds.length) return alert("수량이 올바르지 않습니다.");
+        if (!confirm(`[${itemName}] ${quantity}개를 환불하시겠습니까?\n총 ₩${totalRefund.toLocaleString()}이 즉시 입금됩니다.`)) return;
 
         try {
             const userRef = db.collection('users').doc(this.user.uid);
-            const invRef = userRef.collection('inventory').doc(itemId);
+            const selectedIds = allItemIds.slice(0, quantity); // 정확히 선택한 수량만큼만 추출
 
             await db.runTransaction(async (t) => {
-                const iDoc = await t.get(invRef);
-                if (!iDoc.exists) throw new Error("이미 처리된 아이템입니다.");
-                
-                t.update(userRef, { balance: firebase.firestore.FieldValue.increment(price) });
-                t.delete(invRef);
+                // 선택된 ID들에 대해서만 삭제 수행
+                for (const id of selectedIds) {
+                    const invRef = userRef.collection('inventory').doc(id);
+                    t.delete(invRef);
+                }
+                // 입금액도 개수에 맞게 계산
+                t.update(userRef, { balance: firebase.firestore.FieldValue.increment(totalRefund) });
             });
 
-            alert("환불이 완료되었습니다.");
+            alert(`${quantity}개의 물품 환불이 완료되었습니다.`);
             document.getElementById('item-detail-modal').style.display = 'none';
-            logActivity('shop', `[${itemName}] 환불 (₩${price.toLocaleString()} 입금)`);
+            logActivity('shop', `[${itemName}] ${quantity}개 환불 (₩${totalRefund.toLocaleString()} 입금)`);
         } catch (err) { alert("환불 실패: " + err.message); }
     }
 
@@ -1551,34 +1558,40 @@ window.sendBulkItems = async () => {
     } catch (err) { alert("선물 실패: " + err.message); }
 };
 
-window.giftItem = async (itemId, itemName, price, targetUid, targetName) => {
+window.giftItem = async (itemName, price, targetUid, targetName, allItemIds) => {
+    const qtyInput = document.getElementById('item-detail-qty');
+    const quantity = parseInt(qtyInput.value) || 1;
+
     if (!targetUid) return alert("선물할 대상을 선택하세요.");
     if (targetUid === window.userState.currentUser.uid) return alert("자기 자신에게는 선물할 수 없습니다.");
-    if (!confirm(`[${itemName}]을 ${targetName}님에게 선물하시겠습니까?`)) return;
+    if (quantity < 1 || quantity > allItemIds.length) return alert("수량이 올바르지 않습니다.");
+    
+    if (!confirm(`[${itemName}] ${quantity}개를 ${targetName}님에게 선물하시겠습니까?`)) return;
 
     try {
         const senderUid = window.userState.currentUser.uid;
-        const senderInvRef = db.collection('users').doc(senderUid).collection('inventory').doc(itemId);
-        const receiverInvRef = db.collection('users').doc(targetUid).collection('inventory').doc();
+        const selectedIds = allItemIds.slice(0, quantity); // 정확히 선택한 수량만큼만 추출
 
         await db.runTransaction(async (t) => {
-            const itemDoc = await t.get(senderInvRef);
-            if (!itemDoc.exists) throw new Error("아이템을 찾을 수 없습니다.");
-            
-            // 보낸 사람 인벤토리에서 삭제
-            t.delete(senderInvRef);
-            // 받는 사람 인벤토리에 추가
-            t.set(receiverInvRef, {
-                itemName,
-                price,
-                timestamp: firebase.firestore.Timestamp.now(),
-                from: window.userState.currentUser.nickname || window.userState.currentUser.username
-            });
+            for (const id of selectedIds) {
+                const senderInvRef = db.collection('users').doc(senderUid).collection('inventory').doc(id);
+                const receiverInvRef = db.collection('users').doc(targetUid).collection('inventory').doc();
+                
+                // 보낸 사람 인벤토리에서 삭제
+                t.delete(senderInvRef);
+                // 받는 사람 인벤토리에 추가
+                t.set(receiverInvRef, {
+                    itemName,
+                    price,
+                    timestamp: firebase.firestore.Timestamp.now(),
+                    from: window.userState.currentUser.nickname || window.userState.currentUser.username
+                });
+            }
         });
 
-        alert(`${targetName}님에게 선물을 보냈습니다!`);
+        alert(`${targetName}님에게 ${quantity}개의 선물을 보냈습니다!`);
         document.getElementById('item-detail-modal').style.display = 'none';
-        logActivity('shop', `${targetName}님에게 [${itemName}] 선물`);
+        logActivity('shop', `${targetName}님에게 [${itemName}] ${quantity}개 선물`);
     } catch (err) { alert("선물 실패: " + err.message); }
 };
 
@@ -1587,22 +1600,47 @@ window.openItemDetail = async (group) => {
     const body = document.getElementById('item-detail-body');
     const giftSection = document.getElementById('gift-section');
     const refundSection = document.getElementById('refund-section');
+    const qtyInput = document.getElementById('item-detail-qty');
     const config = window.userState.classData?.shopConfig || {};
     const currentUser = window.userState.currentUser;
     
-    // (1) 기본 정보 표시
+    // 현재 열린 아이템 그룹을 전역에 저장 (함수 호출 시 인자 오염 방지)
+    window.currentItemDetailGroup = group;
+
+    // (1) 수량 선택 초기화
+    qtyInput.value = 1;
+    qtyInput.max = group.count;
+    
+    const updateQtyUI = () => {
+        let val = parseInt(qtyInput.value) || 1;
+        if (val < 1) val = 1;
+        if (val > group.count) val = group.count;
+        qtyInput.value = val;
+        
+        const refundBtn = document.getElementById('refund-action-btn');
+        if (refundBtn) {
+            refundBtn.innerHTML = `선택 수량 환불하기 (₩${(val * group.price).toLocaleString()})`;
+        }
+    };
+
+    window.adjustItemDetailQty = (diff) => {
+        qtyInput.value = (parseInt(qtyInput.value) || 1) + diff;
+        updateQtyUI();
+    };
+    qtyInput.oninput = updateQtyUI;
+
+    // (2) 기본 정보 표시
     body.innerHTML = `
         <h3 style="color:var(--primary); font-size:1.5rem;">${group.itemName}</h3>
         <p style="color:#888;">보유 수량: ${group.count}개</p>
         <p style="color:#888;">구매가: ₩${group.price.toLocaleString()}</p>
     `;
 
-    // (2) 선물하기 섹션 구성
+    // (3) 선물하기 섹션 구성
     giftSection.style.display = 'block';
     const giftSelect = document.getElementById('gift-target-user');
     const giftBtn = document.getElementById('gift-action-btn');
     
-    // 학급 인원 불러오기
     const code = (currentUser.classCode || currentUser.adminCode).trim().toUpperCase();
     const userSnap = await db.collection('users').where('adminCode', '==', code).get();
     giftSelect.innerHTML = '<option value="">받는 사람 선택</option>';
@@ -1616,10 +1654,10 @@ window.openItemDetail = async (group) => {
     giftBtn.onclick = () => {
         const targetUid = giftSelect.value;
         const targetName = giftSelect.options[giftSelect.selectedIndex].text;
-        window.giftItem(group.ids[0], group.itemName, group.price, targetUid, targetName);
+        window.giftItem(group.itemName, group.price, targetUid, targetName, window.currentItemDetailGroup.ids);
     };
 
-    // (3) 환불 섹션 구성 (하단으로 이동)
+    // (4) 환불 섹션 구성
     const now = new Date();
     const purchaseDate = group.latestDate;
     const diffDays = purchaseDate ? Math.floor((now - purchaseDate) / (1000 * 60 * 60 * 24)) : 999;
@@ -1631,8 +1669,8 @@ window.openItemDetail = async (group) => {
             refundHtml = `
                 <div style="margin-top:10px; padding:10px; border:1px solid #444; border-radius:10px; background:rgba(255,255,255,0.02);">
                     <p style="color:#888; font-size:0.8rem;">환불 기간: ${config.refundDays}일 이내 (현재 ${diffDays}일째)</p>
-                    <button onclick="window.simulation.refundItem('${group.ids[0]}', '${group.itemName}', ${group.price})" 
-                            class="submit-btn" style="background:#444; color:var(--danger); margin-top:5px; padding:8px;">환불하기</button>
+                    <button id="refund-action-btn" onclick="window.simulation.refundItem('${group.itemName}', ${group.price}, window.currentItemDetailGroup.ids)" 
+                            class="submit-btn" style="background:#444; color:var(--danger); margin-top:5px; padding:8px;">선택 수량 환불하기</button>
                 </div>
             `;
         } else {
@@ -1640,6 +1678,7 @@ window.openItemDetail = async (group) => {
         }
     }
     refundSection.innerHTML = refundHtml;
+    updateQtyUI();
 
     modal.style.display = 'block';
 };
