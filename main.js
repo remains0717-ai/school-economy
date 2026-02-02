@@ -18,6 +18,7 @@ class AuthManager {
     constructor(simulation) {
         this.simulation = simulation;
         this.classUnsub = null;
+        this.adminListUnsub = null;
         this.initEvents();
         this.listenToAuth();
     }
@@ -62,6 +63,7 @@ class AuthManager {
             window.userState.unsubscribe.forEach(u => u());
             window.userState.unsubscribe = [];
             if (this.classUnsub) this.classUnsub();
+            if (this.adminListUnsub) { this.adminListUnsub(); this.adminListUnsub = null; }
 
             if (user) {
                 const unsub = db.collection('users').doc(user.uid).onSnapshot(doc => {
@@ -165,17 +167,19 @@ class AuthManager {
         const code = this.currentCode;
         if (!code) return;
 
+        if (this.adminListUnsub) return; // Already listening
+
         // [1] 학생 목록 (onSnapshot으로 실시간 연동)
-        db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(snap => {
-            const accBody = document.getElementById('student-list-body');
+        this.adminListUnsub = db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(async snap => {
             const assetBody = document.getElementById('asset-mgmt-body');
+            const accBody = document.getElementById('student-list-body');
             const jobBody = document.getElementById('job-mgmt-body');
             
             if (accBody) accBody.innerHTML = '';
             if (assetBody) assetBody.innerHTML = '';
             if (jobBody) jobBody.innerHTML = '';
 
-            snap.forEach(doc => {
+            for (const doc of snap.docs) {
                 const d = doc.data();
                 const uid = doc.id;
 
@@ -187,13 +191,38 @@ class AuthManager {
                 }
 
                 if (assetBody) {
-                    assetBody.innerHTML += `<tr><td><input type="checkbox" class="student-checkbox" value="${uid}"></td><td>${d.nickname||d.username}</td><td style="color:var(--primary)">₩${(d.balance||0).toLocaleString()}</td><td>₩${(d.bankBalance||0).toLocaleString()}</td><td class="important-metric">₩${((d.balance||0)+(d.bankBalance||0)).toLocaleString()}</td><td><button onclick="window.openModifyModal('${uid}','${d.username}',${d.balance||0})">수정</button></td></tr>`;
+                    const balance = Number(d.balance || 0);
+                    const bankBalance = Number(d.bankBalance || 0);
+                    const debt = Number(d.debt || 0);
+                    
+                    // 각 학생의 주식 총액 계산
+                    const portSnap = await db.collection('users').doc(uid).collection('portfolio').get();
+                    let stockTotal = 0;
+                    for (const pDoc of portSnap.docs) {
+                        const p = pDoc.data();
+                        const symbol = pDoc.id.replace('_', ':');
+                        const price = await this.simulation.getStockPrice(symbol);
+                        stockTotal += (price * p.count * this.simulation.exchangeRate);
+                    }
+                    
+                    const totalAssets = balance + bankBalance + stockTotal - debt;
+
+                    assetBody.innerHTML += `<tr>
+                        <td><input type="checkbox" class="student-checkbox" value="${uid}"></td>
+                        <td>${d.nickname||d.username}</td>
+                        <td style="color:var(--primary)">₩${balance.toLocaleString()}</td>
+                        <td>₩${bankBalance.toLocaleString()}</td>
+                        <td style="color:var(--secondary)">₩${Math.floor(stockTotal).toLocaleString()}</td>
+                        <td style="color:var(--danger)">₩${debt.toLocaleString()}</td>
+                        <td class="important-metric">₩${Math.floor(totalAssets).toLocaleString()}</td>
+                        <td><button onclick="window.openModifyModal('${uid}','${d.username}',${balance})">수정</button></td>
+                    </tr>`;
                 }
 
                 if (jobBody) {
                     jobBody.innerHTML += `<tr><td><input type="checkbox" class="job-checkbox" value="${uid}"></td><td>${d.nickname||d.username}</td><td><input type="text" value="${d.job||''}" class="job-input" style="width:80px"></td><td><input type="number" value="${d.salary||0}" class="salary-input" style="width:80px"></td><td><button onclick="window.updateJobInfo('${uid}', this)">저장</button></td></tr>`;
                 }
-            });
+            }
             
             document.querySelectorAll('.student-checkbox').forEach(cb => cb.onchange = () => this.updateSelectedCount());
             document.querySelectorAll('.job-checkbox').forEach(cb => cb.onchange = () => this.updateSelectedJobCount());
@@ -287,31 +316,149 @@ class AuthManager {
 class EconomicSimulation {
     constructor() { 
         this.user = null; 
+        this.depositUnsub = null;
+        this.loanUnsub = null;
         this.currentStock = null;
+        this.tradeMode = 'buy';
+        this.exchangeRate = 1350; // 고정 환율 시뮬레이션
+        this.tvWidget = null;
+        
         this.topStocks = [
-            { symbol: 'AAPL', name: '애플' }, { symbol: 'TSLA', name: '테슬라' },
-            { symbol: 'NVDA', name: '엔비디아' }, { symbol: 'MSFT', name: '마이크로소프트' },
-            { symbol: 'AMZN', name: '아마존' }, { symbol: 'GOOGL', name: '구글' },
-            { symbol: 'META', name: '메타' }, { symbol: 'NFLX', name: '넷플릭스' },
-            { symbol: 'BTC-USD', name: '비트코인' }, { symbol: 'DIS', name: '디즈니' }
+            { symbol: 'NASDAQ:AAPL', name: '애플' }, { symbol: 'NASDAQ:TSLA', name: '테슬라' },
+            { symbol: 'NASDAQ:NVDA', name: '엔비디아' }, { symbol: 'NASDAQ:MSFT', name: '마이크로소프트' },
+            { symbol: 'NASDAQ:AMZN', name: '아마존' }, { symbol: 'NASDAQ:GOOGL', name: '구글' },
+            { symbol: 'NASDAQ:META', name: '메타' }, { symbol: 'NASDAQ:NFLX', name: '넷플릭스' },
+            { symbol: 'BINANCE:BTCUSDT', name: '비트코인' }, { symbol: 'NYSE:DIS', name: '디즈니' }
         ];
     }
+
+    initTradingView(symbol = 'NASDAQ:AAPL') {
+        if (typeof TradingView === 'undefined') return;
+        
+        this.tvWidget = new TradingView.widget({
+            "autosize": true,
+            "symbol": symbol,
+            "interval": "D",
+            "timezone": "Asia/Seoul",
+            "theme": "dark",
+            "style": "1",
+            "locale": "ko",
+            "toolbar_bg": "#f1f3f6",
+            "enable_publishing": false,
+            "allow_symbol_change": true,
+            "container_id": "tradingview_chart"
+        });
+    }
+
+    updateTradingView(symbol) {
+        if (this.tvWidget && typeof TradingView !== 'undefined') {
+            this.initTradingView(symbol);
+        }
+    }
+
     sync(user) { 
+        const isNewUser = !this.user || this.user.uid !== user.uid;
         this.user = user; 
+        const balance = Number(user.balance || 0);
+        const bankBalance = Number(user.bankBalance || 0);
+        const debt = Number(user.debt || 0);
+        const stockAssets = this.lastStockTotal || 0;
+
         const setT = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-        setT('current-cash', (user.balance||0).toLocaleString());
-        setT('current-bank-balance', (user.bankBalance||0).toLocaleString());
-        setT('bank-balance-amount', (user.bankBalance||0).toLocaleString());
-        setT('total-assets', ((user.balance||0) + (user.bankBalance||0)).toLocaleString());
+        setT('current-cash', balance.toLocaleString());
+        setT('current-bank-balance', bankBalance.toLocaleString());
+        setT('current-stock-assets', Math.floor(stockAssets).toLocaleString());
+        setT('current-debt', debt.toLocaleString());
+        setT('bank-balance-amount', bankBalance.toLocaleString());
+        setT('total-assets', Math.floor(balance + bankBalance + stockAssets - debt).toLocaleString());
         setT('display-job', user.job || "없음");
         setT('display-credit', user.creditScore || 500);
+        setT('trade-available-balance', `₩ ${balance.toLocaleString()}`);
         
         const grade = Math.max(1, Math.min(10, 11 - Math.floor((user.creditScore || 500) / 100)));
         setT('loan-credit-grade', `${grade}등급`);
         setT('loan-limit', ((11-grade)*5000).toLocaleString());
-        this.loadDeposits();
-        this.loadTopStocks();
-        if (this.currentStock) this.selectStock(this.currentStock.symbol, this.currentStock.name);
+        
+        if (isNewUser) {
+            this.loadDeposits();
+            this.loadLoans();
+            this.loadTopStocks();
+            this.loadPortfolio();
+            this.initTradingView();
+            this.setupTradeListeners();
+        }
+        
+        if (this.currentStock) this.updateTradeSummary();
+    }
+
+    loadPortfolio() {
+        db.collection('users').doc(this.user.uid).collection('portfolio').onSnapshot(async (snap) => {
+            const body = document.getElementById('portfolio-body');
+            if (!body) return;
+            body.innerHTML = '';
+            
+            let totalEval = 0;
+
+            for (const doc of snap.docs) {
+                const p = doc.data();
+                const symbol = doc.id.replace('_', ':');
+                const price = await this.getStockPrice(symbol);
+                const evalAmount = price * p.count * this.exchangeRate;
+                const investAmount = p.avgPrice * p.count * this.exchangeRate;
+                const profit = evalAmount - investAmount;
+                const profitRate = ((price / p.avgPrice) - 1) * 100;
+                
+                totalEval += evalAmount;
+
+                const color = profit >= 0 ? 'var(--danger)' : '#2196f3';
+
+                body.innerHTML += `<tr>
+                    <td><strong>${symbol.split(':')[1]}</strong></td>
+                    <td>${p.count} 주</td>
+                    <td>$${p.avgPrice.toLocaleString()}</td>
+                    <td>$${price.toLocaleString()}</td>
+                    <td style="color:${color}">${profitRate.toFixed(2)}%<br><small>(₩${Math.floor(profit).toLocaleString()})</small></td>
+                    <td><strong>₩${Math.floor(evalAmount).toLocaleString()}</strong></td>
+                </tr>`;
+            }
+            
+            this.lastStockTotal = totalEval;
+            const balance = Number(this.user.balance || 0);
+            const bankBalance = Number(this.user.bankBalance || 0);
+            const debt = Number(this.user.debt || 0);
+            
+            document.getElementById('current-stock-assets').textContent = Math.floor(totalEval).toLocaleString();
+            document.getElementById('total-assets').textContent = Math.floor(balance + bankBalance + totalEval - debt).toLocaleString();
+
+            if (snap.empty) {
+                body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#666; padding:40px;">보유 중인 주식이 없습니다.</td></tr>';
+                this.lastStockTotal = 0;
+            }
+        });
+    }
+
+    setupTradeListeners() {
+        document.getElementById('stock-trade-amount')?.addEventListener('input', () => this.updateTradeSummary());
+        document.getElementById('execute-trade-btn')?.addEventListener('click', () => this.executeTrade());
+    }
+
+    setTradeMode(mode) {
+        this.tradeMode = mode;
+        const btn = document.getElementById('execute-trade-btn');
+        const tabs = document.querySelectorAll('.trade-tab');
+        
+        tabs.forEach(t => {
+            t.classList.toggle('active', t.textContent === (mode === 'buy' ? '매수' : '매도'));
+        });
+
+        if (mode === 'buy') {
+            btn.textContent = '매수하기';
+            btn.className = 'submit-btn trade-submit-buy';
+        } else {
+            btn.textContent = '매도하기';
+            btn.className = 'submit-btn trade-submit-sell';
+        }
+        this.updateTradeSummary();
     }
 
     async loadTopStocks() {
@@ -320,91 +467,80 @@ class EconomicSimulation {
         listContainer.innerHTML = '';
 
         for (const stock of this.topStocks) {
-            const price = await this.getStockPrice(stock.symbol);
             const card = document.createElement('div');
-            card.className = 'asset-status';
+            card.className = 'inventory-item';
             card.style.cursor = 'pointer';
-            card.style.border = '1px solid #333';
             card.onclick = () => this.selectStock(stock.symbol, stock.name);
-            card.innerHTML = `
-                <strong style="color:var(--primary)">${stock.name}</strong>
-                <p style="margin:5px 0; font-size:0.9rem;">$${price.toLocaleString()}</p>
-                <small style="color:#888;">${stock.symbol}</small>
-            `;
+            card.innerHTML = `<span>${stock.name}</span><small>${stock.symbol.split(':')[1]}</small>`;
             listContainer.appendChild(card);
         }
     }
 
     async searchStock() {
-        const query = document.getElementById('stock-search-input').value.trim();
+        let query = document.getElementById('stock-search-input').value.trim().toUpperCase();
         if (!query) return;
         
-        const resultsBox = document.getElementById('stock-search-results');
-        resultsBox.innerHTML = '<p style="padding:10px; color:#888;">검색 중...</p>';
-        resultsBox.classList.remove('hidden');
+        // 심볼 형식 보정 (예: AAPL -> NASDAQ:AAPL)
+        if (!query.includes(':')) {
+            if (['BTC', 'ETH', 'SOL'].includes(query)) query = `BINANCE:${query}USDT`;
+            else query = `NASDAQ:${query}`;
+        }
 
-        try {
-            // Yahoo Finance Search API (CORS 프록시 사용 권장되나 여기선 시연용으로 구성)
-            // 실제 구현 시 백엔드 프록시나 공식 API 키 사용 필요
-            // 여기서는 검색어와 매칭되는 주요 종목 필터링으로 대체하여 안정성 확보
-            const matches = this.topStocks.filter(s => s.name.includes(query) || s.symbol.includes(query.toUpperCase()));
-            
-            if (matches.length === 0) {
-                resultsBox.innerHTML = '<p style="padding:10px; color:#888;">결과가 없습니다.</p>';
-            } else {
-                resultsBox.innerHTML = '';
-                matches.forEach(s => {
-                    const div = document.createElement('div');
-                    div.style.padding = '10px';
-                    div.style.cursor = 'pointer';
-                    div.style.borderBottom = '1px solid #333';
-                    div.innerHTML = `<strong>${s.name}</strong> <small style="color:#888;">(${s.symbol})</small>`;
-                    div.onclick = () => {
-                        this.selectStock(s.symbol, s.name);
-                        resultsBox.classList.add('hidden');
-                    };
-                    resultsBox.appendChild(div);
-                });
-            }
-        } catch (err) { resultsBox.innerHTML = '<p style="padding:10px; color:var(--danger)">검색 실패</p>'; }
+        this.selectStock(query, query.split(':')[1]);
     }
 
     async selectStock(symbol, name) {
         const price = await this.getStockPrice(symbol);
         this.currentStock = { symbol, name, price };
+        this.updateTradingView(symbol);
         
-        document.getElementById('stock-detail-panel').classList.remove('hidden');
         document.getElementById('selected-stock-name').textContent = name;
         document.getElementById('selected-stock-symbol').textContent = symbol;
-        document.getElementById('current-price-val').textContent = `$${price.toLocaleString()}`;
+        this.updateTradeSummary();
         
         // 보유 현황 로드
-        const portSnap = await db.collection('users').doc(this.user.uid).collection('portfolio').doc(symbol).get();
+        const portSnap = await db.collection('users').doc(this.user.uid).collection('portfolio').doc(symbol.replace(':', '_')).get();
         const myData = portSnap.exists ? portSnap.data() : { count: 0, avgPrice: 0 };
-        document.getElementById('my-stock-count').textContent = myData.count;
+        document.getElementById('my-stock-count').textContent = `${myData.count} 주`;
         document.getElementById('my-avg-price').textContent = `$${(myData.avgPrice || 0).toLocaleString()}`;
     }
 
     async getStockPrice(symbol) {
-        // 실제 운영 시 Finnhub, Alpha Vantage 등 사용
-        // 여기서는 시연을 위해 고정가에 약간의 변동성을 준 시뮬레이션 가격 반환
-        const basePrices = { AAPL: 180, TSLA: 200, NVDA: 700, MSFT: 400, AMZN: 170, GOOGL: 140, META: 450, NFLX: 600, 'BTC-USD': 50000, DIS: 110 };
-        const base = basePrices[symbol] || 100;
-        const volatility = (Math.random() - 0.5) * (base * 0.02); // 1% 변동성
-        return Math.floor((base + volatility) * 100) / 100;
+        // 실제 API 연동이 어려운 경우 시뮬레이션 가격을 사용하되, 
+        // TradingView 위젯이 실시간 가격을 보여주므로 시뮬레이션 범위를 좁힘
+        const basePrices = { AAPL: 180, TSLA: 200, NVDA: 700, MSFT: 400, AMZN: 170, GOOGL: 140, META: 450, NFLX: 600, BTCUSDT: 50000, DIS: 110 };
+        const ticker = symbol.split(':')[1].replace('USDT', '');
+        const base = basePrices[ticker] || 100;
+        return Math.floor((base + (Math.random() - 0.5) * 2) * 100) / 100;
     }
 
-    async executeTrade(type) {
+    updateTradeSummary() {
+        if (!this.currentStock) return;
+        const amount = parseInt(document.getElementById('stock-trade-amount').value) || 0;
+        const price = this.currentStock.price;
+        const krwPrice = Math.floor(price * this.exchangeRate);
+        const total = krwPrice * amount;
+
+        document.getElementById('current-price-val').textContent = `$${price.toLocaleString()}`;
+        document.getElementById('krw-price-val').textContent = krwPrice.toLocaleString();
+        document.getElementById('order-total-price').textContent = `₩ ${total.toLocaleString()}`;
+        
+        const balance = this.tradeMode === 'buy' ? Number(this.user.balance) : 0;
+        document.getElementById('trade-available-balance').textContent = this.tradeMode === 'buy' ? `₩ ${balance.toLocaleString()}` : '매도 가능 수량 확인';
+    }
+
+    async executeTrade() {
         if (!this.currentStock) return alert("종목을 먼저 선택하세요.");
         const amount = parseInt(document.getElementById('stock-trade-amount').value);
         if (isNaN(amount) || amount <= 0) return alert("수량을 입력하세요.");
 
         const symbol = this.currentStock.symbol;
+        const safeSymbol = symbol.replace(':', '_');
         const price = this.currentStock.price;
-        const totalCost = price * amount * 1300; // 환율 시뮬레이션 (1300원)
+        const totalCost = Math.floor(price * amount * this.exchangeRate);
         
         const userRef = db.collection('users').doc(this.user.uid);
-        const portRef = userRef.collection('portfolio').doc(symbol);
+        const portRef = userRef.collection('portfolio').doc(safeSymbol);
 
         try {
             await db.runTransaction(async (t) => {
@@ -413,28 +549,32 @@ class EconomicSimulation {
                 const uData = uDoc.data();
                 const pData = pDoc.exists ? pDoc.data() : { count: 0, avgPrice: 0 };
 
-                if (type === 'buy') {
+                if (this.tradeMode === 'buy') {
                     if (uData.balance < totalCost) throw new Error("잔액이 부족합니다.");
-                    const newCount = pData.count + amount;
-                    const newAvg = ((pData.avgPrice * pData.count) + (price * amount)) / newCount;
+                    const newCount = (pData.count || 0) + amount;
+                    const newAvg = (((pData.avgPrice || 0) * (pData.count || 0)) + (price * amount)) / newCount;
                     t.update(userRef, { balance: uData.balance - totalCost });
                     t.set(portRef, { count: newCount, avgPrice: newAvg });
                 } else {
-                    if (pData.count < amount) throw new Error("보유 수량이 부족합니다.");
+                    if ((pData.count || 0) < amount) throw new Error("보유 수량이 부족합니다.");
                     t.update(userRef, { balance: uData.balance + totalCost });
                     const newCount = pData.count - amount;
                     if (newCount === 0) t.delete(portRef);
                     else t.update(portRef, { count: newCount });
                 }
             });
-            alert(`${type === 'buy' ? '매수' : '매도'} 완료!`);
-            this.sync(this.user);
+            alert(`${this.tradeMode === 'buy' ? '매수' : '매도'} 완료!`);
+            this.selectStock(symbol, this.currentStock.name); // UI 갱신
         } catch (err) { alert(err.message); }
     }
 
     async deposit() {
-        const amt = parseInt(document.getElementById('bank-amount').value);
-        if (isNaN(amt) || amt <= 0 || this.user.balance < amt) return alert("금액 부족 또는 잘못된 입력");
+        const amtInput = document.getElementById('bank-amount');
+        const amt = parseInt(amtInput.value);
+        const currentBalance = Number(this.user?.balance || 0);
+
+        if (isNaN(amt) || amt <= 0) return alert("올바른 금액을 입력하세요.");
+        if (currentBalance < amt) return alert(`잔액이 부족합니다. (현재 현금: ₩${currentBalance.toLocaleString()})`);
         
         const data = window.userState.classData;
         const maturityDate = new Date();
@@ -443,9 +583,19 @@ class EconomicSimulation {
         try {
             const batch = db.batch();
             const uRef = db.collection('users').doc(this.user.uid);
-            batch.update(uRef, { balance: firebase.firestore.FieldValue.increment(-amt), bankBalance: firebase.firestore.FieldValue.increment(amt) });
-            batch.set(uRef.collection('deposits').doc(), { amount: amt, rate: data.baseRate||0, status: 'active', maturityAt: firebase.firestore.Timestamp.fromDate(maturityDate), timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+            batch.update(uRef, { 
+                balance: firebase.firestore.FieldValue.increment(-amt), 
+                bankBalance: firebase.firestore.FieldValue.increment(amt) 
+            });
+            batch.set(uRef.collection('deposits').doc(), { 
+                amount: amt, 
+                rate: data.baseRate||0, 
+                status: 'active', 
+                maturityAt: firebase.firestore.Timestamp.fromDate(maturityDate), 
+                timestamp: firebase.firestore.Timestamp.now() 
+            });
             await batch.commit();
+            amtInput.value = '';
             alert("입금 완료!");
         } catch (err) { alert(err.message); }
     }
@@ -495,14 +645,16 @@ class EconomicSimulation {
     }
 
     loadDeposits() {
-        db.collection('users').doc(this.user.uid).collection('deposits').orderBy('timestamp','desc').onSnapshot(snap => {
+        if (this.depositUnsub) this.depositUnsub();
+        
+        this.depositUnsub = db.collection('users').doc(this.user.uid).collection('deposits').orderBy('timestamp','desc').onSnapshot(snap => {
             const body = document.getElementById('deposit-list-body');
             if (body) {
                 body.innerHTML = '';
                 snap.forEach(doc => {
                     const d = doc.data();
                     const now = new Date();
-                    const isMatured = d.maturityAt.toDate() <= now;
+                    const isMatured = d.maturityAt && d.maturityAt.toDate() <= now;
                     const interest = Math.floor(d.amount * (d.rate / 100));
                     
                     let statusText = d.status;
@@ -521,7 +673,7 @@ class EconomicSimulation {
                         <td>₩${d.amount.toLocaleString()}</td>
                         <td>${d.rate}%</td>
                         <td>₩${interest.toLocaleString()}</td>
-                        <td>${d.maturityAt.toDate().toLocaleString()}</td>
+                        <td>${d.maturityAt ? d.maturityAt.toDate().toLocaleString() : '-'}</td>
                         <td>${statusText}</td>
                     </tr>`;
                 });
@@ -530,14 +682,104 @@ class EconomicSimulation {
     }
 
     async applyLoan() {
-        const amt = parseInt(document.getElementById('loan-request-amount').value);
+        const amtInput = document.getElementById('loan-request-amount');
+        const amt = parseInt(amtInput.value);
         if (isNaN(amt) || amt <= 0) return alert("금액 오류");
+
+        const grade = Math.max(1, Math.min(10, 11 - Math.floor((this.user.creditScore || 500) / 100)));
+        const limit = (11 - grade) * 5000;
+        const currentDebt = Number(this.user.debt || 0);
+
+        if (currentDebt + amt > limit) return alert(`대출 한도를 초과했습니다. (가능 잔액: ₩${(limit - currentDebt).toLocaleString()})`);
+
+        const data = window.userState.classData;
+        const loanRate = (data.baseRate || 0) + (data.loanSpread || 2.0);
+
         try {
-            await db.collection('users').doc(this.user.uid).update({ balance: firebase.firestore.FieldValue.increment(amt), debt: firebase.firestore.FieldValue.increment(amt) });
-            alert("대출 완료");
+            const batch = db.batch();
+            const uRef = db.collection('users').doc(this.user.uid);
+            batch.update(uRef, { 
+                balance: firebase.firestore.FieldValue.increment(amt), 
+                debt: firebase.firestore.FieldValue.increment(amt) 
+            });
+            batch.set(uRef.collection('loans').doc(), {
+                amount: amt,
+                rate: loanRate,
+                status: 'active',
+                timestamp: firebase.firestore.Timestamp.now()
+            });
+            await batch.commit();
+            amtInput.value = '';
+            alert("대출이 완료되었습니다.");
         } catch (err) { alert(err.message); }
     }
-    reset() { this.user = null; }
+
+    loadLoans() {
+        if (this.loanUnsub) this.loanUnsub();
+
+        this.loanUnsub = db.collection('users').doc(this.user.uid).collection('loans').orderBy('timestamp', 'desc').onSnapshot(snap => {
+            const body = document.getElementById('loan-list-body');
+            if (!body) return;
+            body.innerHTML = '';
+            
+            let totalDebt = 0;
+            let totalInterest = 0;
+
+            snap.forEach(doc => {
+                const d = doc.data();
+                if (d.status !== 'active') return;
+
+                const now = new Date();
+                const loanDate = d.timestamp.toDate();
+                const hoursPassed = Math.floor((now - loanDate) / (1000 * 60 * 60));
+                
+                // 간단한 이자 계산 시뮬레이션: 1시간당 (연리/8760) 적용
+                const interest = Math.floor(d.amount * (d.rate / 100) * (hoursPassed / 8760) * 100); // 가독성을 위해 100배 가속 시뮬레이션 가능
+                const totalToPay = d.amount + interest;
+
+                totalDebt += d.amount;
+                totalInterest += interest;
+
+                body.innerHTML += `<tr>
+                    <td>₩${d.amount.toLocaleString()}</td>
+                    <td>${d.rate}%</td>
+                    <td style="color:var(--danger)">₩${interest.toLocaleString()}</td>
+                    <td><strong>₩${totalToPay.toLocaleString()}</strong></td>
+                    <td>${loanDate.toLocaleString()}</td>
+                    <td><button onclick="window.simulation.repayLoan('${doc.id}', ${totalToPay}, ${d.amount})" class="auth-btn" style="font-size:0.8rem; padding:5px 10px;">상환</button></td>
+                </tr>`;
+            });
+
+            document.getElementById('loan-total-debt').textContent = `₩ ${totalDebt.toLocaleString()}`;
+            document.getElementById('loan-total-interest').textContent = `₩ ${totalInterest.toLocaleString()}`;
+        });
+    }
+
+    async repayLoan(loanId, totalToPay, principal) {
+        if (this.user.balance < totalToPay) return alert("잔액이 부족하여 상환할 수 없습니다.");
+        if (!confirm(`총 ₩${totalToPay.toLocaleString()}을 상환하시겠습니까?`)) return;
+
+        try {
+            const batch = db.batch();
+            const uRef = db.collection('users').doc(this.user.uid);
+            const lRef = uRef.collection('loans').doc(loanId);
+
+            batch.update(uRef, { 
+                balance: firebase.firestore.FieldValue.increment(-totalToPay),
+                debt: firebase.firestore.FieldValue.increment(-principal)
+            });
+            batch.update(lRef, { status: 'repaid', repaidAt: firebase.firestore.Timestamp.now() });
+
+            await batch.commit();
+            alert("상환이 완료되었습니다.");
+        } catch (err) { alert(err.message); }
+    }
+
+    reset() { 
+        this.user = null; 
+        if (this.depositUnsub) { this.depositUnsub(); this.depositUnsub = null; }
+        if (this.loanUnsub) { this.loanUnsub(); this.loanUnsub = null; }
+    }
 }
 
 // [Global Admin Functions]

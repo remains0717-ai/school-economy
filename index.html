@@ -124,6 +124,8 @@
                             <h3>나의 자산</h3>
                             <p>현금 잔고: <span id="current-cash" class="important-metric">0</span></p>
                             <p>은행 예금: <span id="current-bank-balance">0</span></p>
+                            <p>주식 자산: <span id="current-stock-assets" style="color:var(--primary)">0</span></p>
+                            <p>나의 대출: <span id="current-debt" style="color:var(--danger)">0</span></p>
                             <p>총 자산: <span id="total-assets" class="important-metric">0</span></p>
                         </div>
                         <div class="asset-status">
@@ -212,57 +214,114 @@
 
             <!-- [4] 대출 서비스 -->
             <div id="loan-view" class="view">
-                <h2>중앙 은행 대출</h2>
+                <h2>은행 대출</h2>
                 <div class="asset-status">
-                    <p>현재 대출 금리: <strong id="display-loan-rate" style="color:var(--danger)">0%</strong> (연리)</p>
-                    <p>나의 신용 등급: <span id="loan-credit-grade" style="color:#ffeb3b">5등급</span></p>
-                    <p>대출 가능 한도: ₩ <span id="loan-limit" style="color:#00ffdd">0</span></p>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                        <div>
+                            <p>현재 대출 금리: <strong id="display-loan-rate" style="color:var(--danger)">0%</strong> (연리)</p>
+                            <p>나의 신용 등급: <span id="loan-credit-grade" style="color:#ffeb3b">5등급</span></p>
+                            <p>대출 가능 한도: ₩ <span id="loan-limit" style="color:#00ffdd">0</span></p>
+                        </div>
+                        <div style="border-left:1px solid #333; padding-left:20px;">
+                            <p>총 미상환 대출액: <strong id="loan-total-debt" style="color:var(--danger)">₩ 0</strong></p>
+                            <p>예상 총 이자: <span id="loan-total-interest">₩ 0</span></p>
+                        </div>
+                    </div>
                     <hr style="margin:20px 0; border-color:#333;">
                     <input type="number" id="loan-request-amount" placeholder="신청 금액">
                     <button id="apply-loan-btn" class="submit-btn">대출 신청하기</button>
                 </div>
+
+                <h3 style="margin-top:30px;">나의 대출 목록</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>신청액</th>
+                            <th>금리</th>
+                            <th>현재 이자</th>
+                            <th>상환액(합계)</th>
+                            <th>대출 일시</th>
+                            <th>관리</th>
+                        </tr>
+                    </thead>
+                    <tbody id="loan-list-body"></tbody>
+                </table>
             </div>
 
             <!-- [5] 모의 주식 투자 -->
             <div id="stock-trading-view" class="view">
                 <h2>모의 주식 투자</h2>
                 
-                <div class="asset-status" style="margin-bottom:20px;">
-                    <h3>🔍 종목 검색</h3>
-                    <div style="display:flex; gap:10px;">
-                        <input type="text" id="stock-search-input" placeholder="회사명 또는 티커 입력 (예: 삼성전자, AAPL)" style="flex:1">
-                        <button id="search-stock-btn" class="auth-btn">검색</button>
-                    </div>
-                    <div id="stock-search-results" class="search-results-box hidden" style="background:#222; margin-top:10px; border-radius:5px; max-height:200px; overflow-y:auto; border:1px solid #444;"></div>
-                </div>
-
-                <div class="asset-status">
-                    <h3>🔥 실시간 인기 종목 (TOP 10)</h3>
-                    <div id="top-stocks-list" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:15px; margin-top:15px;">
-                        <p style="color:#888;">데이터를 불러오는 중...</p>
-                    </div>
-                </div>
-
-                <div id="stock-detail-panel" class="trading-panel hidden" style="background:#1e1e1e; padding:20px; border-radius:10px; margin-top:20px; border:1px solid var(--primary);">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h3 id="selected-stock-name" style="margin:0;">종목명</h3>
-                        <span id="selected-stock-symbol" style="color:#888; font-weight:bold;">SYMBOL</span>
-                    </div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:15px;">
-                        <div>
-                            <p style="margin:5px 0;">현재가: <span id="current-price-val" class="important-metric" style="color:var(--primary)">0</span></p>
-                            <p style="margin:5px 0;">변동폭: <span id="price-change-val">0</span></p>
+                <div style="display: grid; grid-template-columns: 1fr 350px; gap: 20px; align-items: start;">
+                    <!-- 좌측: 차트 및 검색 -->
+                    <div>
+                        <div class="asset-status" style="margin-top:0;">
+                            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                                <input type="text" id="stock-search-input" placeholder="종목 코드 입력 (예: AAPL, TSLA, BTCUSD)" style="flex:1">
+                                <button id="search-stock-btn" class="auth-btn" style="width:80px;">검색</button>
+                            </div>
+                            <!-- TradingView 차트 위젯 -->
+                            <div id="tradingview_widget_container" style="height: 500px; border-radius: 10px; overflow: hidden; border: 1px solid #333;">
+                                <div id="tradingview_chart"></div>
+                            </div>
                         </div>
-                        <div style="text-align:right">
-                            <p style="margin:5px 0;">보유 수량: <span id="my-stock-count" style="color:#ffeb3b">0</span>주</p>
-                            <p style="margin:5px 0;">평균 단가: <span id="my-avg-price">0</span></p>
+
+                        <div class="asset-status">
+                            <h3>🔥 인기 종목</h3>
+                            <div id="top-stocks-list" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:10px;"></div>
                         </div>
                     </div>
-                    
-                    <div class="trade-controls" style="display:flex; gap:10px; margin-top:20px;">
-                        <input type="number" id="stock-trade-amount" placeholder="수량" style="flex:1">
-                        <button id="buy-action-btn" class="auth-btn" style="background:#f44336; color:white; flex:1; border:none;">매수</button>
-                        <button id="sell-action-btn" class="auth-btn" style="background:#2196f3; color:white; flex:1; border:none;">매도</button>
+
+                    <!-- 우측: 매수/매도 주문 패널 -->
+                    <div id="stock-detail-panel" class="trading-panel sticky-panel">
+                        <div class="trade-tab-container">
+                            <button class="trade-tab active" onclick="window.simulation.setTradeMode('buy')">매수</button>
+                            <button class="trade-tab" onclick="window.simulation.setTradeMode('sell')">매도</button>
+                        </div>
+                        
+                        <div class="trade-info-box">
+                            <h3 id="selected-stock-name">종목을 선택하세요</h3>
+                            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                                <span id="selected-stock-symbol" style="color:#888;">-</span>
+                                <span id="current-price-val" class="important-metric" style="font-size:1.8rem;">$0.00</span>
+                            </div>
+                            <p style="margin:5px 0; font-size:0.9rem; color:#888; text-align:right;">환율 적용: ₩ <span id="krw-price-val">0</span></p>
+                        </div>
+
+                        <div class="trade-form">
+                            <div class="input-group">
+                                <label>주문 수량</label>
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <input type="number" id="stock-trade-amount" value="1" min="1">
+                                    <span>주</span>
+                                </div>
+                            </div>
+                            
+                            <div class="trade-summary" style="margin-top:20px; padding:15px; background:rgba(255,255,255,0.03); border-radius:10px;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                    <span>주문 금액</span>
+                                    <span id="order-total-price">₩ 0</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.9rem; color:#888;">
+                                    <span>가능 잔액</span>
+                                    <span id="trade-available-balance">₩ 0</span>
+                                </div>
+                            </div>
+
+                            <button id="execute-trade-btn" class="submit-btn trade-submit-buy">매수하기</button>
+                            
+                            <div class="my-holdings" style="margin-top:20px; border-top:1px solid #333; padding-top:15px;">
+                                <p style="font-size:0.9rem; color:#888;">보유 현황</p>
+                                <div style="display:flex; justify-content:space-between; margin-top:5px;">
+                                    <span>보유 수량</span>
+                                    <span id="my-stock-count" style="color:var(--secondary)">0 주</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span>평균 단가</span>
+                                    <span id="my-avg-price">$0.00</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -323,7 +382,7 @@
 
             <!-- [9] 자산 관리 (관리자 개편) -->
             <div id="asset-mgmt-view" class="view">
-                <h2>학생 자산 상세 모니터링</h2>
+                <h2>자산 관리</h2>
                 <div class="table-scroll">
                     <table>
                         <thead>
@@ -332,6 +391,8 @@
                                 <th>학생명</th>
                                 <th>현금</th>
                                 <th>예금</th>
+                                <th>주식</th>
+                                <th>대출</th>
                                 <th>총 자산</th>
                                 <th>관리</th>
                             </tr>
@@ -407,6 +468,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script src="main.js" type="module"></script>
 </body>
 </html>
