@@ -14,13 +14,31 @@
                 <button id="login-btn" class="auth-btn">로그인</button>
                 <button id="signup-btn" class="auth-btn">회원가입</button>
                 <div id="user-info" class="hidden">
-                    <span id="user-display-name"></span>
+                    <span id="user-display-name" style="cursor: pointer; text-decoration: underline;"></span>
                     <span id="user-role-badge"></span>
                     <button id="logout-btn" class="auth-btn">로그아웃</button>
                 </div>
             </div>
         </div>
     </header>
+
+    <!-- My Info Modal -->
+    <div id="my-info-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-my-info" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
+            <h2>내 정보</h2>
+            <div id="my-info-content" style="line-height: 2;">
+                <p>아이디: <span id="info-username"></span></p>
+                <p>역할: <span id="info-role"></span></p>
+                <div id="info-admin-section" class="hidden">
+                    <p>이메일: <span id="info-email"></span></p>
+                    <p style="background: #1a1a1a; padding: 10px; border: 1px dashed #00ffdd;">
+                        학급 코드: <strong id="info-class-code" style="font-size: 1.2em; color: #00ffdd;"></strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Authentication Modal -->
     <div id="auth-modal" class="modal">

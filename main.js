@@ -206,6 +206,15 @@ class AuthManager {
         document.querySelector('.close-modal').addEventListener('click', () => this.closeModal());
         document.getElementById('logout-btn').addEventListener('click', () => this.logout());
 
+        // My Info events
+        document.getElementById('user-display-name').addEventListener('click', () => this.openMyInfo());
+        const closeMyInfoBtn = document.querySelector('.close-my-info');
+        if (closeMyInfoBtn) {
+            closeMyInfoBtn.addEventListener('click', () => {
+                document.getElementById('my-info-modal').style.display = 'none';
+            });
+        }
+
         document.getElementById('signup-role').addEventListener('change', (e) => {
             const emailInput = document.getElementById('signup-email');
             if (e.target.value === 'admin') {
@@ -235,7 +244,28 @@ class AuthManager {
 
         window.onclick = (event) => {
             if (event.target == this.modal) this.closeModal();
+            const myInfoModal = document.getElementById('my-info-modal');
+            if (event.target == myInfoModal) myInfoModal.style.display = 'none';
         };
+    }
+
+    openMyInfo() {
+        if (!this.currentUser) return;
+        
+        const myInfoModal = document.getElementById('my-info-modal');
+        document.getElementById('info-username').textContent = this.currentUser.username;
+        document.getElementById('info-role').textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
+        
+        const adminSection = document.getElementById('info-admin-section');
+        if (this.currentUser.role === 'admin') {
+            adminSection.classList.remove('hidden');
+            document.getElementById('info-email').textContent = auth.currentUser.email;
+            document.getElementById('info-class-code').textContent = this.currentUser.classCode || '발급되지 않음';
+        } else {
+            adminSection.classList.add('hidden');
+        }
+        
+        myInfoModal.style.display = 'block';
     }
 
     listenToAuthChanges() {
@@ -356,10 +386,8 @@ class AuthManager {
                 alert('회원가입이 완료되었습니다! 로그인해 주세요.');
                 this.closeModal();
             } else {
-                // For admin, we stay a bit to show the code, then they can close or we close after 3s
-                setTimeout(() => {
-                    this.closeModal();
-                }, 5000);
+                alert(`회원가입 완료! 관리자 학급 코드는 [${classCode}] 입니다. 학생들에게 공유해주세요.`);
+                this.closeModal(); // 명시적으로 즉시 닫기
             }
         } catch (error) {
             let msg = '회원가입 실패: ' + error.message;
