@@ -176,24 +176,38 @@ class AuthManager {
 
     updateUI() {
         const loggedIn = !!this.currentUser;
-        document.getElementById('user-info').classList.toggle('hidden', !loggedIn);
-        document.getElementById('login-btn').classList.toggle('hidden', loggedIn);
-        document.getElementById('signup-btn').classList.toggle('hidden', loggedIn);
-        document.getElementById('logged-in-home').classList.toggle('hidden', !loggedIn);
-        document.getElementById('logged-out-home').classList.toggle('hidden', loggedIn);
+        const userInfo = document.getElementById('user-info');
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
+        const loggedInHome = document.getElementById('logged-in-home');
+        const loggedOutHome = document.getElementById('logged-out-home');
+        const adminMenu = document.getElementById('admin-menu');
+        const adminBankMgmt = document.getElementById('admin-bank-mgmt');
+
+        if (userInfo) userInfo.classList.toggle('hidden', !loggedIn);
+        if (loginBtn) loginBtn.classList.toggle('hidden', loggedIn);
+        if (signupBtn) signupBtn.classList.toggle('hidden', loggedIn);
+        if (loggedInHome) loggedInHome.classList.toggle('hidden', !loggedIn);
+        if (loggedOutHome) loggedOutHome.classList.toggle('hidden', loggedIn);
 
         if (loggedIn) {
-            document.getElementById('user-display-name').textContent = this.currentUser.nickname || this.currentUser.username;
+            const displayName = document.getElementById('user-display-name');
+            if (displayName) displayName.textContent = this.currentUser.nickname || this.currentUser.username;
+            
             const isAdmin = this.currentUser.role === 'admin';
-            document.getElementById('admin-menu').classList.toggle('hidden', !isAdmin);
-            document.getElementById('admin-bank-mgmt').classList.toggle('hidden', !isAdmin);
+            if (adminMenu) adminMenu.classList.toggle('hidden', !isAdmin);
+            if (adminBankMgmt) adminBankMgmt.classList.toggle('hidden', !isAdmin);
             
             if (isAdmin) {
-                document.getElementById('mgmt-class-code').textContent = this.currentUser.classCode;
+                const mgmtCode = document.getElementById('mgmt-class-code');
+                if (mgmtCode) mgmtCode.textContent = this.currentUser.classCode;
                 this.loadStudentList();
                 this.loadStudentAssets();
-                this.simulation.loadClassLogs();
+                if (this.simulation) this.simulation.loadClassLogs();
             }
+        } else {
+            if (adminMenu) adminMenu.classList.add('hidden');
+            if (adminBankMgmt) adminBankMgmt.classList.add('hidden');
         }
     }
 
