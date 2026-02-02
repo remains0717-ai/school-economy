@@ -357,58 +357,63 @@ class AuthManager {
             sidebarLinks: document.querySelectorAll('.sidebar li:not(#admin-menu) a:not(#home-link)')
         };
 
-        if (this.currentUser) {
-            if (els.loginBtn) els.loginBtn.classList.add('hidden');
-            if (els.signupBtn) els.signupBtn.classList.add('hidden');
-            if (els.userInfo) els.userInfo.classList.remove('hidden');
-            
-            const nameToDisplay = this.currentUser.nickname || this.currentUser.username;
-            if (els.userDisplay) {
-                els.userDisplay.textContent = nameToDisplay;
-                const code = this.currentUser.classCode || this.currentUser.adminCode;
-                if (code) els.userDisplay.textContent += ` [${code}]`;
-            }
-
-            if (els.roleBadge) {
-                let statusText = this.currentUser.role === 'admin' ? '관리자' : '학생';
-                if (this.currentUser.role === 'student' && !this.currentUser.isAuthorized) {
-                    statusText = '비인증 학생';
-                    els.roleBadge.style.color = '#ff9800';
-                } else {
-                    els.roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
-                }
-                els.roleBadge.textContent = statusText;
-            }
-
-            // 권한 제한: 비인증 학생 접근 차단
-            const isRestricted = this.currentUser.role === 'student' && !this.currentUser.isAuthorized;
-            els.sidebarLinks.forEach(link => {
-                link.style.opacity = isRestricted ? '0.3' : '1';
-                link.style.pointerEvents = isRestricted ? 'none' : 'auto';
-            });
-            
-            if (this.currentUser.role === 'admin') {
-                if (els.adminMenu) els.adminMenu.classList.remove('hidden');
-                if (els.adminBankMgmt) els.adminBankMgmt.classList.remove('hidden');
-                const mgmtCode = document.getElementById('mgmt-class-code');
-                if (mgmtCode) mgmtCode.textContent = this.currentUser.classCode;
-                this.loadStudentList();
-                this.loadStudentAssets();
-                if (this.simulation) this.simulation.loadClassLogs();
-            } else {
-                if (els.adminMenu) els.adminMenu.classList.add('hidden');
-                if (els.adminBankMgmt) els.adminBankMgmt.classList.add('hidden');
-            }
-        } else {
+        // 1. 비로그인 상태 (게스트 모드)
+        if (!this.currentUser) {
             if (els.loginBtn) els.loginBtn.classList.remove('hidden');
             if (els.signupBtn) els.signupBtn.classList.remove('hidden');
             if (els.userInfo) els.userInfo.classList.add('hidden');
             if (els.adminMenu) els.adminMenu.classList.add('hidden');
             if (els.adminBankMgmt) els.adminBankMgmt.classList.add('hidden');
+            
+            // 게스트는 메뉴를 구경할 수 있도록 투명도 해제 (클릭은 되지만 시뮬레이션에서 차단)
             els.sidebarLinks.forEach(link => {
-                link.style.opacity = '0.3';
-                link.style.pointerEvents = 'none';
+                link.style.opacity = '1';
+                link.style.pointerEvents = 'auto';
             });
+            return;
+        }
+
+        // 2. 로그인 상태
+        if (els.loginBtn) els.loginBtn.classList.add('hidden');
+        if (els.signupBtn) els.signupBtn.classList.add('hidden');
+        if (els.userInfo) els.userInfo.classList.remove('hidden');
+        
+        const nameToDisplay = this.currentUser.nickname || this.currentUser.username;
+        if (els.userDisplay) {
+            els.userDisplay.textContent = nameToDisplay;
+            const code = this.currentUser.classCode || this.currentUser.adminCode;
+            if (code) els.userDisplay.textContent += ` [${code}]`;
+        }
+
+        if (els.roleBadge) {
+            let statusText = this.currentUser.role === 'admin' ? '관리자' : '학생';
+            if (this.currentUser.role === 'student' && !this.currentUser.isAuthorized) {
+                statusText = '비인증 학생';
+                els.roleBadge.style.color = '#ff9800';
+            } else {
+                els.roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
+            }
+            els.roleBadge.textContent = statusText;
+        }
+
+        // [권한 제한] 비인증 학생만 접근 차단 (게스트는 허용)
+        const isRestrictedStudent = this.currentUser.role === 'student' && !this.currentUser.isAuthorized;
+        els.sidebarLinks.forEach(link => {
+            link.style.opacity = isRestrictedStudent ? '0.3' : '1';
+            link.style.pointerEvents = isRestrictedStudent ? 'none' : 'auto';
+        });
+        
+        if (this.currentUser.role === 'admin') {
+            if (els.adminMenu) els.adminMenu.classList.remove('hidden');
+            if (els.adminBankMgmt) els.adminBankMgmt.classList.remove('hidden');
+            const mgmtCode = document.getElementById('mgmt-class-code');
+            if (mgmtCode) mgmtCode.textContent = this.currentUser.classCode;
+            this.loadStudentList();
+            this.loadStudentAssets();
+            if (this.simulation) this.simulation.loadClassLogs();
+        } else {
+            if (els.adminMenu) els.adminMenu.classList.add('hidden');
+            if (els.adminBankMgmt) els.adminBankMgmt.classList.add('hidden');
         }
     }
 
