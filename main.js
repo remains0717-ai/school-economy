@@ -156,7 +156,8 @@ class AuthManager {
         const code = this.currentCode;
         if (!code) return;
 
-        db.collection('users').where('adminCode','==',code).where('role','==','student').get().then(snap => {
+        // [1] 학생 목록 (onSnapshot으로 실시간 연동)
+        db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(snap => {
             const accBody = document.getElementById('student-list-body');
             const assetBody = document.getElementById('asset-mgmt-body');
             const jobBody = document.getElementById('job-mgmt-body');
@@ -172,7 +173,8 @@ class AuthManager {
                 if (accBody) {
                     const status = d.isAuthorized ? '<span style="color:var(--primary)">승인됨</span>' : '<span style="color:var(--danger)">미승인</span>';
                     const btnText = d.isAuthorized ? "승인 취소" : "승인 하기";
-                    accBody.innerHTML += `<tr><td>${d.username}</td><td>${status}</td><td><button onclick="window.toggleApproval('${uid}', ${!d.isAuthorized})">${btnText}</button></td></tr>`;
+                    const btnColor = d.isAuthorized ? "var(--danger)" : "var(--primary)";
+                    accBody.innerHTML += `<tr><td>${d.username}</td><td>${status}</td><td><button onclick="window.toggleApproval('${uid}', ${!d.isAuthorized})" style="background:${btnColor}">${btnText}</button></td></tr>`;
                 }
 
                 if (assetBody) {
@@ -396,20 +398,32 @@ window.sendBulkSalaries = async () => {
 window.sendBulkAssets = async () => {
     const selected = document.querySelectorAll('.student-checkbox:checked');
     const amt = parseInt(document.getElementById('bulk-cash-amount').value);
+    if (isNaN(amt) || amt <= 0) return alert("금액 오류");
+
+    const u = window.userState.currentUser;
+    const code = (u.classCode || u.adminCode).trim().toUpperCase();
     const data = window.userState.classData;
-    const code = (window.userState.currentUser.classCode || window.userState.currentUser.adminCode).trim().toUpperCase();
     const total = selected.length * amt;
+    const treasury = data.treasury || 0;
+
+    let useBond = false;
+    if (treasury < total) {
+        if (!confirm(`국고 부족! (잔액: ₩${treasury.toLocaleString()} / 필요: ₩${total.toLocaleString()})\n\n국채를 발행하시겠습니까?`)) return;
+        useBond = true;
+    } else {
+        if (!confirm(`${selected.length}명에게 ₩${amt.toLocaleString()}씩 지급하시겠습니까?`)) return;
+    }
 
     const batch = db.batch();
     selected.forEach(cb => batch.update(db.collection('users').doc(cb.value), { balance: firebase.firestore.FieldValue.increment(amt) }));
     
-    const isBond = data.treasury < total;
     batch.update(db.collection('classes').doc(code), { 
-        treasury: isBond ? 0 : data.treasury - total, 
-        debt: firebase.firestore.FieldValue.increment(isBond ? total - data.treasury : 0) 
+        treasury: useBond ? 0 : treasury - total, 
+        debt: firebase.firestore.FieldValue.increment(useBond ? total - treasury : 0) 
     });
     await batch.commit();
-    alert("포상 완료!");
+    alert("지급 완료!");
+    document.getElementById('bulk-cash-amount').value = '';
 };
 
 window.toggleApproval = async (uid, s) => { await db.collection('users').doc(uid).update({ isAuthorized: s }); };
@@ -453,10 +467,15 @@ window.sendBulkItems = async () => {
         const item = iDoc.data();
         const totalCost = selected.length * item.price;
 
-        if (data.treasury < totalCost) return alert("국고 잔액이 부족하여 아이템을 구매할 수 없습니다.");
         if (item.stock < selected.length) return alert("상점 재고가 부족합니다.");
 
-        if (!confirm(`${selected.length}명에게 [${item.name}]을 선물하시겠습니까?\n(국고 ₩${totalCost.toLocaleString()} 차감)`)) return;
+        let useBond = false;
+        if (data.treasury < totalCost) {
+            if (!confirm(`국고 부족! (잔액: ₩${data.treasury.toLocaleString()} / 필요: ₩${totalCost.toLocaleString()})\n\n국채를 발행하여 선물하시겠습니까?`)) return;
+            useBond = true;
+        } else {
+            if (!confirm(`${selected.length}명에게 [${item.name}]을 선물하시겠습니까?\n(국고 ₩${totalCost.toLocaleString()} 차감)`)) return;
+        }
 
         const batch = db.batch();
         selected.forEach(cb => {
@@ -465,7 +484,10 @@ window.sendBulkItems = async () => {
             });
         });
         batch.update(iRef, { stock: firebase.firestore.FieldValue.increment(-selected.length) });
-        batch.update(db.collection('classes').doc(code), { treasury: firebase.firestore.FieldValue.increment(-totalCost) });
+        batch.update(db.collection('classes').doc(code), { 
+            treasury: useBond ? 0 : data.treasury - totalCost,
+            debt: firebase.firestore.FieldValue.increment(useBond ? totalCost - data.treasury : 0)
+        });
         
         await batch.commit();
         alert("선물 완료!");
