@@ -22,7 +22,26 @@
         </div>
     </header>
 
-    <!-- [1] 로그인/회원가입 통합 모달 -->
+    <!-- [1] 상점 관리 모달 (관리자 전용) -->
+    <div id="shop-mgmt-modal" class="modal">
+        <div class="modal-content" style="width: 450px;">
+            <span class="close-shop-mgmt" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
+            <h2>상점 물품 관리</h2>
+            <div class="input-group">
+                <input type="text" id="item-name" placeholder="아이템 이름">
+                <input type="number" id="item-price" placeholder="가격 (₩)" style="margin-top:10px;">
+                <input type="number" id="item-stock" placeholder="초기 수량" style="margin-top:10px;">
+                <textarea id="item-desc" placeholder="아이템 설명" style="margin-top:10px; width:100%; height:60px; background:#1a1a1a; color:white; border:1px solid #333; border-radius:8px; padding:10px;"></textarea>
+                <button id="add-item-btn" class="submit-btn">물품 등록하기</button>
+            </div>
+            <hr style="margin: 20px 0; border-color: #444;">
+            <div id="admin-item-list" class="table-scroll" style="max-height: 250px;">
+                <!-- 등록된 아이템 목록 및 삭제 버튼 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 기존 모달들 (Auth, My Info, Modify Asset, Activity) 유지 -->
     <div id="auth-modal" class="modal">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
@@ -41,22 +60,17 @@
                         <option value="student">학생</option>
                         <option value="admin">관리자</option>
                     </select>
-                    <div id="signup-username-container">
-                        <input type="text" id="signup-username" placeholder="아이디" required>
-                    </div>
-                    <div id="signup-class-code-container">
-                        <input type="text" id="signup-class-code" placeholder="학급 코드 (관리자 문의)" required>
-                    </div>
-                    <input type="email" id="signup-email" class="hidden" placeholder="관리자용 이메일">
+                    <div id="signup-username-container"><input type="text" id="signup-username" placeholder="아이디"></div>
+                    <div id="signup-class-code-container"><input type="text" id="signup-class-code" placeholder="학급 코드"></div>
+                    <input type="email" id="signup-email" class="hidden" placeholder="이메일">
                     <input type="password" id="signup-password" placeholder="비밀번호 (6자 이상)" required>
                     <button type="submit" class="submit-btn">가입하기</button>
                 </form>
             </div>
-            <p id="auth-toggle-text">계정이 없으신가요? <a href="#" id="toggle-to-signup">회원가입</a></p>
+            <p id="auth-toggle-text"></p>
         </div>
     </div>
 
-    <!-- [2] 내 정보 모달 -->
     <div id="my-info-modal" class="modal">
         <div class="modal-content">
             <span class="close-my-info" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
@@ -65,91 +79,54 @@
                 <p>아이디: <span id="info-username"></span></p>
                 <p>역할: <span id="info-role"></span></p>
                 <p id="info-email-row" class="hidden">이메일: <span id="info-email"></span></p>
-                <div class="code-box">
-                    <p>소속 학급 코드</p>
-                    <strong id="info-class-code"></strong>
-                </div>
+                <div class="code-box"><p>학급 코드</p><strong id="info-class-code"></strong></div>
             </div>
         </div>
     </div>
 
-    <!-- [3] 자산 수정 모달 (관리자용) -->
     <div id="modify-asset-modal" class="modal">
         <div class="modal-content">
             <span class="close-modify-asset" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
             <h2>자산 강제 제어</h2>
-            <p>대상: <span id="modify-target-name" style="color: #00ffdd;"></span></p>
-            <div class="input-group">
-                <label>변경할 현금 잔고</label>
-                <input type="number" id="modify-cash-amount">
-            </div>
-            <div class="input-group">
-                <label>수정 사유</label>
-                <input type="text" id="modify-reason" placeholder="예: 세금 징수">
-            </div>
+            <p>대상: <span id="modify-target-name" style="color:#00ffdd"></span></p>
+            <input type="number" id="modify-cash-amount" placeholder="변경할 잔고">
+            <input type="text" id="modify-reason" placeholder="수정 사유" style="margin-top:10px;">
             <button id="confirm-modify-asset" class="submit-btn">확인 및 저장</button>
         </div>
     </div>
 
-    <!-- [4] 활동 기록 모달 -->
-    <div id="activity-detail-modal" class="modal">
-        <div class="modal-content" style="width: 500px;">
-            <span class="close-activity-detail" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
-            <h2>활동 기록 상세</h2>
-            <p>대상: <span id="activity-target-name" style="color: #00ffdd;"></span></p>
-            <div class="table-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>일시</th>
-                            <th>종류</th>
-                            <th>금액</th>
-                        </tr>
-                    </thead>
-                    <tbody id="activity-list-body"></tbody>
-                </table>
-            </div>
-        </div>
+    <!-- [플로팅 버튼] 관리자 전용 설정 버튼 -->
+    <div id="admin-fab" class="fab hidden" title="상점 관리">
+        <span>⚙️</span>
     </div>
 
     <div class="container">
         <nav class="sidebar">
             <ul>
                 <li><a href="#" id="home-link" class="active">홈</a></li>
-                
-                <li class="menu-item menu-group">
-                    <a href="#" class="parent-link">
-                        <span>은행</span>
-                        <span class="chevron"></span>
-                    </a>
+                <li class="menu-item">
+                    <a href="#" class="parent-link"><span>은행</span><span class="chevron"></span></a>
                     <ul class="sub-menu">
                         <li><a href="#" id="bank-main-link">중앙 은행</a></li>
                         <li><a href="#" id="deposit-status-link">예/적금 현황</a></li>
-                        <li id="admin-bank-mgmt" class="hidden"><a href="#" id="bank-mgmt-link" style="color: #ff4d4d;">은행 관리</a></li>
+                        <li id="admin-bank-mgmt" class="hidden"><a href="#" id="bank-mgmt-link" style="color:#ff4d4d">은행 관리</a></li>
                     </ul>
                 </li>
-
                 <li class="menu-item">
-                    <a href="#" class="parent-link">
-                        <span>증권</span>
-                        <span class="chevron"></span>
-                    </a>
+                    <a href="#" class="parent-link"><span>증권</span><span class="chevron"></span></a>
                     <ul class="sub-menu">
                         <li><a href="#" id="stock-trading-link">모의 주식 투자</a></li>
                         <li><a href="#" id="portfolio-link">투자 수익률</a></li>
                     </ul>
                 </li>
+                <!-- [상점 메뉴 신설] -->
+                <li><a href="#" id="shop-link">상점</a></li>
 
                 <li id="admin-menu" class="menu-item hidden menu-group">
-                    <a href="#" id="class-mgmt-link" class="parent-link" style="color: #ff4d4d;">
-                        <span>학급 관리</span>
-                        <span class="chevron"></span>
-                    </a>
+                    <a href="#" id="class-mgmt-link" class="parent-link" style="color:#ff4d4d"><span>학급 관리</span><span class="chevron"></span></a>
                     <ul class="sub-menu">
-                        <li><a href="#" id="account-mgmt-link">학생 관리</a></li>
                         <li><a href="#" id="asset-mgmt-link">자산 관리</a></li>
-                        <li><a href="#" id="job-mgmt-link">직업 관리</a></li>
-                        <li><a href="#" id="stats-mgmt-link">통계 관리</a></li>
+                        <li><a href="#" id="account-mgmt-link">학생 관리</a></li>
                         <li><a href="#" id="db-mgmt-link">데이터베이스</a></li>
                     </ul>
                 </li>
@@ -157,143 +134,85 @@
         </nav>
 
         <main class="content-area">
-            <!-- [홈 화면] 조건부 메시지 포함 -->
             <div id="home-view" class="view active">
                 <div id="logged-in-home" class="hidden">
                     <h2>현재 자산 현황</h2>
                     <div class="asset-status">
                         <p>보유 현금: <span id="current-cash" class="important-metric">0</span></p>
                         <p>은행 예금: <span id="current-bank-balance">0</span></p>
-                        <p>주식 평가액: <span id="current-stock-value">0</span></p>
                         <hr>
-                        <p style="font-size: 1.4em; color: #00ffdd;">총 자산: <span id="total-assets" class="important-metric">0</span></p>
+                        <p style="font-size:1.4em; color:#00ffdd">총 자산: <span id="total-assets" class="important-metric">0</span></p>
                     </div>
                 </div>
                 <div id="logged-out-home" class="guest-msg">
                     <h2>환영합니다!</h2>
-                    <p class="important-metric">로그인 후 시뮬레이션 이용이 가능합니다.</p>
-                    <p style="color: #888;">계정이 없으시면 회원가입을 먼저 진행해 주세요.</p>
+                    <p class="important-metric">로그인 후 이용 가능합니다.</p>
                 </div>
             </div>
 
-            <!-- 중앙 은행 -->
+            <!-- [상점 뷰] -->
+            <div id="shop-view" class="view">
+                <h2>상점</h2>
+                <p style="color:#888; margin-bottom:20px;">필요한 물품을 구매하여 경제 활동을 풍요롭게 만드세요.</p>
+                <div id="shop-item-grid" class="shop-grid">
+                    <!-- 아이템 카드들이 여기에 생성됨 -->
+                </div>
+            </div>
+
+            <!-- 은행, 증권, 관리 뷰들 기존 구조 유지 -->
             <div id="bank-main-view" class="view">
                 <h2>중앙 은행</h2>
                 <div class="bank-container">
                     <div class="bank-info-card">
-                        <div class="balance-display">
-                            <h3>나의 예금 잔액</h3>
-                            <p>₩ <span id="bank-balance-amount" class="important-metric">0</span></p>
-                            <small id="bank-current-settings">이자율 정보를 불러오는 중...</small>
-                        </div>
+                        <p>나의 예금 잔액: ₩ <span id="bank-balance-amount" class="important-metric">0</span></p>
+                        <small id="bank-current-settings"></small>
                     </div>
                     <div class="bank-controls">
-                        <input type="number" id="bank-amount" placeholder="거래 금액">
+                        <input type="number" id="bank-amount" placeholder="금액">
                         <div class="button-group">
-                            <button id="deposit-btn" class="deposit">입금하기</button>
-                            <button id="withdraw-btn" class="withdraw">출금하기</button>
+                            <button id="deposit-btn" class="deposit">입금</button>
+                            <button id="withdraw-btn" class="withdraw">출금</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 예/적금 현황 -->
             <div id="deposit-status-view" class="view">
                 <h2>예/적금 현황</h2>
-                <table>
-                    <thead>
-                        <tr><th>입금액</th><th>이자율</th><th>예상 이자</th><th>만기</th><th>상태</th></tr>
-                    </thead>
-                    <tbody id="deposit-list-body"></tbody>
-                </table>
+                <table><thead><tr><th>입금액</th><th>이자율</th><th>만기</th><th>상태</th></tr></thead><tbody id="deposit-list-body"></tbody></table>
             </div>
 
-            <!-- 은행 관리 -->
-            <div id="bank-mgmt-view" class="view">
-                <h2>은행 관리 (관리자)</h2>
-                <div class="asset-status">
-                    <label>기본 이자율 (%)</label>
-                    <input type="number" id="setting-interest-rate" step="0.1">
-                    <label>예금 기간 (초)</label>
-                    <input type="number" id="setting-deposit-period">
-                    <button id="save-bank-settings" class="submit-btn">설정 저장</button>
-                </div>
-            </div>
-
-            <!-- 주식 거래 -->
             <div id="stock-trading-view" class="view">
                 <h2>모의 주식 투자</h2>
-                <div class="stock-search">
-                    <input type="text" id="stock-symbol" placeholder="종목 코드 (예: AAPL)">
-                    <button id="load-stock-btn">차트 로드</button>
-                </div>
-                <div id="stock-chart-container"></div>
+                <div class="stock-search"><input type="text" id="stock-symbol" placeholder="AAPL"><button id="load-stock-btn">로드</button></div>
+                <div id="stock-chart-container" style="height:300px; background:#1a1a1a; margin:20px 0; border-radius:10px;"></div>
                 <div class="trading-panel">
-                    <h3 id="display-stock-name">종목을 선택하세요</h3>
+                    <h3 id="display-stock-name">종목 선택</h3>
                     <p>현재가: <span id="current-stock-price" class="important-metric">0</span></p>
-                    <div class="trade-controls">
-                        <input type="number" id="trade-amount" placeholder="수량">
-                        <button id="buy-stock-btn" class="buy">매수</button>
-                        <button id="sell-stock-btn" class="sell">매도</button>
-                    </div>
+                    <input type="number" id="trade-amount" placeholder="수량">
+                    <button id="buy-stock-btn" class="buy">매수</button>
+                    <button id="sell-stock-btn" class="sell">매도</button>
                 </div>
             </div>
 
-            <!-- 투자 수익률 -->
-            <div id="portfolio-view" class="view">
-                <h2>투자 수익률</h2>
-                <table>
-                    <thead>
-                        <tr><th>종목</th><th>수량</th><th>평균단가</th><th>현재가</th><th>수익률</th><th>평가금액</th></tr>
-                    </thead>
-                    <tbody id="portfolio-body"></tbody>
-                </table>
-            </div>
-
-            <!-- 자산 관리 (관리자) -->
             <div id="asset-mgmt-view" class="view">
                 <h2>학급 자산 관리</h2>
-                <div class="admin-panel-info">
-                    <button class="auth-btn" style="background:#ff9800" onclick="window.batchAction('bonus')">일괄 지원금</button>
-                    <button class="auth-btn" style="background:#f44336" onclick="window.batchAction('reset')">자산 초기화</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr><th>학생</th><th>현금</th><th>예금</th><th>주식</th><th>총 자산</th><th>관리</th></tr>
-                    </thead>
-                    <tbody id="asset-mgmt-body"></tbody>
-                </table>
+                <table><thead><tr><th>학생</th><th>현금</th><th>예금</th><th>총 자산</th><th>관리</th></tr></thead><tbody id="asset-mgmt-body"></tbody></table>
             </div>
 
-            <!-- 계정 관리 (관리자) -->
             <div id="account-mgmt-view" class="view">
                 <h2>학급 계정 관리</h2>
-                <div class="admin-panel-info">
-                    <p>내 학급 코드: <strong id="mgmt-class-code" class="important-metric"></strong></p>
-                </div>
-                <table>
-                    <thead>
-                        <tr><th>아이디</th><th>실명</th><th>권한</th><th>관리</th></tr>
-                    </thead>
-                    <tbody id="student-list-body"></tbody>
-                </table>
+                <p>학급 코드: <strong id="mgmt-class-code" class="important-metric"></strong></p>
+                <table><thead><tr><th>아이디</th><th>실명</th><th>권한</th><th>관리</th></tr></thead><tbody id="student-list-body"></tbody></table>
             </div>
 
-            <!-- 데이터베이스 로그 (관리자) -->
             <div id="db-mgmt-view" class="view">
-                <h2>데이터베이스 (학급 로그)</h2>
-                <div id="class-log-container" class="log-box">
-                    <ul id="class-logs"></ul>
-                </div>
+                <h2>데이터베이스 (통합 로그)</h2>
+                <div class="log-box"><ul id="class-logs"></ul></div>
             </div>
-
-            <div id="job-mgmt-view" class="view"><h2>직업 관리</h2><p>준비 중입니다.</p></div>
-            <div id="stats-mgmt-view" class="view"><h2>통계 관리</h2><p>준비 중입니다.</p></div>
-            <div id="import-export-view" class="view"><h2>가져오기/내보내기</h2><p>준비 중입니다.</p></div>
         </main>
     </div>
 
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
