@@ -233,15 +233,21 @@ class AuthManager {
                 const emailInput = document.getElementById('signup-email');
                 const usernameContainer = document.getElementById('signup-username-container');
                 const classCodeContainer = document.getElementById('signup-class-code-container');
+                const usernameInput = document.getElementById('signup-username');
+                const classCodeInput = document.getElementById('signup-class-code');
 
                 if (e.target.value === 'admin') {
                     if (emailInput) { emailInput.classList.remove('hidden'); emailInput.required = true; }
                     if (usernameContainer) usernameContainer.classList.add('hidden');
+                    if (usernameInput) usernameInput.required = false;
                     if (classCodeContainer) classCodeContainer.classList.add('hidden');
+                    if (classCodeInput) classCodeInput.required = false;
                 } else {
                     if (emailInput) { emailInput.classList.add('hidden'); emailInput.required = false; }
                     if (usernameContainer) usernameContainer.classList.remove('hidden');
+                    if (usernameInput) usernameInput.required = true;
                     if (classCodeContainer) classCodeContainer.classList.remove('hidden');
+                    if (classCodeInput) classCodeInput.required = true;
                 }
             });
         }
@@ -375,9 +381,19 @@ class AuthManager {
             const cc = document.getElementById('signup-class-code-container');
             const un = document.getElementById('signup-username-container');
             const em = document.getElementById('signup-email');
+            const ccInput = document.getElementById('signup-class-code');
+            const unInput = document.getElementById('signup-username');
+            const emInput = document.getElementById('signup-email');
+
             if (cc) cc.classList.remove('hidden');
             if (un) un.classList.remove('hidden');
             if (em) em.classList.add('hidden');
+            
+            // 필수 입력 상태 초기화 (학생 기준)
+            if (ccInput) ccInput.required = true;
+            if (unInput) unInput.required = true;
+            if (emInput) emInput.required = false;
+
             const roleSelect = document.getElementById('signup-role');
             if (roleSelect) roleSelect.value = 'student';
         }
