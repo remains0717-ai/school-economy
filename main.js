@@ -471,16 +471,27 @@ window.adjustTreasury = async (mode) => {
 
 // [신설] 중앙은행 통화 정책 업데이트
 window.updateBankPolicy = async () => {
+    console.log("Attempting to update bank policy...");
     const baseRate = parseFloat(document.getElementById('policy-base-rate').value);
     const maturityHours = parseInt(document.getElementById('policy-maturity-hours').value);
     const loanSpread = parseFloat(document.getElementById('policy-loan-spread').value);
     const bondSpread = parseFloat(document.getElementById('policy-bond-spread').value);
 
     if (isNaN(baseRate) || isNaN(maturityHours) || isNaN(loanSpread) || isNaN(bondSpread)) {
-        return alert("모든 항목에 올바른 값을 입력하세요.");
+        console.error("Invalid input values detected:", {baseRate, maturityHours, loanSpread, bondSpread});
+        return alert("모든 항목에 숫자를 입력해 주세요.");
     }
 
-    const classCode = window.userState.currentUser.classCode;
+    const user = window.userState.currentUser;
+    const classCode = user.classCode || user.adminCode; // 관리자의 경우 보통 classCode에 저장됨
+
+    if (!classCode) {
+        console.error("Class code not found for user:", user);
+        return alert("학급 코드를 찾을 수 없습니다. 다시 로그인해 주세요.");
+    }
+
+    console.log(`Updating class ${classCode} with rates:`, {baseRate, loanSpread, bondSpread});
+
     try {
         await db.collection('classes').doc(classCode).update({
             baseRate,
@@ -488,9 +499,10 @@ window.updateBankPolicy = async () => {
             loanSpread,
             bondSpread
         });
-        alert("통화 정책이 서버에 저장되었으며 실시간으로 반영됩니다.");
+        alert("통화 정책이 성공적으로 반영되었습니다!");
     } catch (err) {
-        alert("정책 반영 실패: " + err.message);
+        console.error("Firestore update failed:", err);
+        alert("정책 반영 중 오류가 발생했습니다: " + err.message);
     }
 };
 
