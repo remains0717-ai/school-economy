@@ -969,19 +969,24 @@ window.deleteShopItem = async (itemId) => {
 };
 
 function loadAdminShopItems(code) {
-    db.collection('items').where('classCode', '==', code).orderBy('createdAt', 'desc').onSnapshot(snap => {
+    // 모든 아이템이 누락 없이 뜨도록 orderBy를 제거하거나 보완된 쿼리를 사용합니다.
+    db.collection('items').where('classCode', '==', code).onSnapshot(snap => {
         const body = document.getElementById('admin-shop-list-body');
         if (!body) return;
         body.innerHTML = '';
         
-        snap.forEach(doc => {
-            const item = doc.data();
+        // 스냅샷에서 데이터를 가져온 후 자바스크립트 단에서 정렬 (createdAt이 없는 옛날 데이터 대응)
+        const items = [];
+        snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+        items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+        items.forEach(item => {
             body.innerHTML += `<tr>
-                <td>${item.category}</td>
+                <td>${item.category || '기타'}</td>
                 <td><strong>${item.name}</strong></td>
                 <td>₩${item.price.toLocaleString()}</td>
                 <td>${item.stock} 개</td>
-                <td><button onclick="window.deleteShopItem('${doc.id}')" style="background:var(--danger); font-size:0.8rem;">삭제</button></td>
+                <td><button onclick="window.deleteShopItem('${item.id}')" style="background:var(--danger); font-size:0.8rem;">삭제</button></td>
             </tr>`;
         });
     });
@@ -993,18 +998,21 @@ function loadStudentShop(code) {
         if (!grid) return;
         grid.innerHTML = '';
 
-        snap.forEach(doc => {
-            const item = doc.data();
+        const items = [];
+        snap.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+        items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+        items.forEach(item => {
             const card = document.createElement('div');
             card.className = 'item-card';
             card.innerHTML = `
-                <small style="color:#888;">${item.category}</small>
+                <small style="color:#888;">${item.category || '기타'}</small>
                 <h3 style="margin:5px 0;">${item.name}</h3>
                 <span class="item-price">₩ ${item.price.toLocaleString()}</span>
                 <p style="font-size:0.9rem; color:${item.stock > 0 ? '#00ffdd' : 'var(--danger)'};">
                     재고: ${item.stock > 0 ? item.stock + '개' : '품절'}
                 </p>
-                <button onclick="window.simulation.buyItem('${doc.id}', '${item.name}', ${item.price}, ${item.stock})" 
+                <button onclick="window.simulation.buyItem('${item.id}', '${item.name}', ${item.price}, ${item.stock})" 
                         class="submit-btn" 
                         ${item.stock <= 0 ? 'disabled style="background:#444;"' : ''}>
                     ${item.stock > 0 ? '구매하기' : '품절'}
