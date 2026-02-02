@@ -965,7 +965,8 @@ class EconomicSimulation {
 window.updateStudentNickname = async (uid, newNickname) => {
     try {
         await db.collection('users').doc(uid).update({ nickname: newNickname });
-        alert('닉네임이 업데이트되었습니다.');
+        // 알림 없이 조용히 데이터만 갱신하거나, 가벼운 알림만 띄움
+        console.log("Nickname updated for", uid);
     } catch (error) {
         alert('업데이트 실패: ' + error.message);
     }
@@ -974,8 +975,11 @@ window.updateStudentNickname = async (uid, newNickname) => {
 window.toggleStudentAuth = async (uid, newStatus) => {
     try {
         await db.collection('users').doc(uid).update({ isAuthorized: newStatus });
+        // 전역 AuthManager 인스턴스를 찾아 목록만 새로고침
+        if (window.authManager) {
+            await window.authManager.loadStudentList();
+        }
         alert(newStatus ? '인증 승인되었습니다.' : '인증 취소되었습니다.');
-        location.reload();
     } catch (error) {
         alert('권한 변경 실패: ' + error.message);
     }
@@ -986,14 +990,18 @@ window.deleteStudentAccount = async (uid, username) => {
         try {
             await db.collection('users').doc(uid).delete();
             await db.collection('playerData').doc(uid).delete();
+            if (window.authManager) {
+                await window.authManager.loadStudentList();
+            }
             alert('계정 정보가 삭제되었습니다.');
-            location.reload();
-        } catch (error) { alert('삭제 실패: ' + error.message); }
+        } catch (error) {
+            alert('삭제 실패: ' + error.message);
+        }
     }
 };
 
 window.addEventListener('load', () => {
     setupNavigation();
     const simulation = new EconomicSimulation();
-    new AuthManager(simulation);
+    window.authManager = new AuthManager(simulation); // 전역 변수로 저장
 });
