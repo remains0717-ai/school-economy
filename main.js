@@ -277,11 +277,31 @@ class AuthManager {
         };
     }
 
+    openMyInfo() {
+        if (!this.currentUser) return;
+        
+        const myInfoModal = document.getElementById('my-info-modal');
+        if (!myInfoModal) return;
+
+        document.getElementById('info-username').textContent = this.currentUser.username;
+        document.getElementById('info-role').textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
+        
+        const adminSection = document.getElementById('info-admin-section');
+        if (this.currentUser.role === 'admin') {
+            if (adminSection) adminSection.classList.remove('hidden');
+            document.getElementById('info-email').textContent = auth.currentUser ? auth.currentUser.email : "";
+            document.getElementById('info-class-code').textContent = this.currentUser.classCode || '발급되지 않음';
+        } else {
+            if (adminSection) adminSection.classList.add('hidden');
+        }
+        
+        myInfoModal.style.display = 'block';
+    }
+
     listenToAuthChanges() {
         auth.onAuthStateChanged(async (user) => {
             console.log("Auth Status Changed:", user ? user.email : "No User");
             if (user) {
-                // UI를 먼저 업데이트 (최소한 로그인 중임은 보여줌)
                 this.currentUser = { uid: user.uid, username: user.email.split('@')[0], role: 'loading' };
                 this.updateUI();
 
@@ -295,10 +315,7 @@ class AuthManager {
                             role: userData.role,
                             classCode: userData.classCode || null
                         };
-                        console.log("User data loaded from Firestore:", this.currentUser);
                         if (this.simulation) this.simulation.loadUserData(user.uid);
-                    } else {
-                        console.warn("User document not found. Might be a new user or legacy account.");
                     }
                 } catch (error) {
                     console.error("Firestore loading error:", error);
@@ -311,8 +328,172 @@ class AuthManager {
         });
     }
 
+    closeModal() {
+        if (this.modal) this.modal.style.display = 'none';
+        
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        if (loginForm) loginForm.reset();
+        if (signupForm) signupForm.reset();
+
+        const signupEmail = document.getElementById('signup-email');
+        const signupUsernameContainer = document.getElementById('signup-username-container');
+        const classCodeContainer = document.getElementById('signup-class-code-container');
+
+        if (signupEmail) signupEmail.classList.add('hidden');
+        if (signupUsernameContainer) signupUsernameContainer.classList.remove('hidden');
+        if (classCodeContainer) classCodeContainer.classList.remove('hidden');
+    }
+
+    openModal(mode) {
+        if (this.modal) this.modal.style.display = 'block';
+        this.switchMode(mode);
+    }
+
+    switchMode(mode) {
+        if (mode === 'login') {
+            this.loginContainer.classList.remove('hidden');
+            this.signupContainer.classList.add('hidden');
+            this.toggleText.innerHTML = `계정이 없으신가요? <a href="#" id="toggle-to-signup">회원가입</a>`;
+        } else {
+            this.loginContainer.classList.add('hidden');
+            this.signupContainer.classList.remove('hidden');
+            this.toggleText.innerHTML = `이미 계정이 있으신가요? <a href="#" id="toggle-to-login">로그인</a>`;
+            
+            const cc = document.getElementById('signup-class-code-container');
+            const un = document.getElementById('signup-username-container');
+            const em = document.getElementById('signup-email');
+            if (cc) cc.classList.remove('hidden');
+            if (un) un.classList.remove('hidden');
+            if (em) em.classList.add('hidden');
+            const roleSelect = document.getElementById('signup-role');
+            if (roleSelect) roleSelect.value = 'student';
+        }
+        
+        const newToggle = mode === 'login' ? document.getElementById('toggle-to-signup') : document.getElementById('toggle-to-login');
+        if (newToggle) {
+            newToggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.switchMode(mode === 'login' ? 'signup' : 'login');
+            });
+        }
+    }
+
+    async login() {
+        const usernameInput = document.getElementById('login-username');
+        const passwordInput = document.getElementById('login-password');
+        if (!usernameInput || !passwordInput) return;
+
+        const username = usernameInput.value.trim();
+        const pass = passwordInput.value;
+        const email = (username.includes('@')) ? username : `${username.toLowerCase()}@school-economy.local`;
+
+        try {
+            await auth.signInWithEmailAndPassword(email, pass);
+            this.closeModal();
+            window.location.reload();
+        } catch (error) {
+            alert('아이디 또는 비밀번호가 틀렸습니다.');
+        }
+    }
+
+    async signup() {
+        const roleSelect = document.getElementById('signup-role');
+        const passInput = document.getElementById('signup-password');
+        const emailInput = document.getElementById('signup-email');
+        const usernameInput = document.getElementById('signup-username');
+        const classCodeInput = document.getElementById('signup-class-code');
+
+        const role = roleSelect ? roleSelect.value : 'student';
+        const pass = passInput ? passInput.value : '';
+        const adminEmail = emailInput ? emailInput.value.trim() : '';
+        let username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
+        const studentClassCode = classCodeInput ? classCodeInput.value.trim().toUpperCase() : '';
+
+        if (pass.length < 6) {
+            alert('비밀번호는 최소 6자 이상이어야 합니다.');
+            return;
+        }
+
+        if (role === 'student' && !username) {
+            alert('아이디를 입력해 주세요.');
+            return;
+        }
+
+        if (role === 'student') {
+            try {
+                const classDoc = await db.collection('classes').doc(studentClassCode).get();
+                if (!classDoc.exists) {
+                    alert('유효하지 않은 학급 코드입니다. 관리자에게 확인해 주세요.');
+                    return;
+                }
+            } catch (err) {
+                alert('학급 코드 확인 중 오류가 발생했습니다.');
+                return;
+            }
+        }
+
+        if (role === 'admin') {
+            if (!adminEmail) { alert('이메일을 입력해 주세요.'); return; }
+            username = adminEmail.split('@')[0];
+        }
+
+        const email = role === 'admin' ? adminEmail : `${username}@school-economy.local`;
+
+        try {
+            const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
+            const user = userCredential.user;
+            
+            let classCode = null;
+            if (role === 'admin') {
+                classCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+                await db.collection('classes').doc(classCode).set({
+                    adminUid: user.uid,
+                    adminEmail: email,
+                    className: `${username} 선생님의 학급`,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            await db.collection('users').doc(user.uid).set({
+                username: username,
+                role: role,
+                email: email,
+                classCode: role === 'admin' ? classCode : studentClassCode,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            await db.collection('playerData').doc(user.uid).set({
+                cash: 1000,
+                bankBalance: 0,
+                goods: 0,
+                portfolio: {}
+            });
+
+            if (role === 'student') {
+                alert('회원가입이 완료되었습니다! 로그인해 주세요.');
+            } else {
+                alert(`회원가입 완료! 학급 코드: [${classCode}]`);
+            }
+            this.closeModal();
+            window.location.reload();
+        } catch (error) {
+            let msg = '회원가입 실패: ' + error.message;
+            if (error.code === 'auth/email-already-in-use') msg = '이미 사용 중인 아이디 또는 이메일입니다.';
+            alert(msg);
+        }
+    }
+
+    async logout() {
+        try {
+            await auth.signOut();
+            window.location.reload();
+        } catch (error) {
+            console.error('Logout Error:', error);
+        }
+    }
+
     updateUI() {
-        console.log("Executing updateUI. CurrentUser:", this.currentUser);
         const els = {
             loginBtn: document.getElementById('login-btn'),
             signupBtn: document.getElementById('signup-btn'),
@@ -327,17 +508,14 @@ class AuthManager {
             if (els.loginBtn) els.loginBtn.classList.add('hidden');
             if (els.signupBtn) els.signupBtn.classList.add('hidden');
             if (els.userInfo) els.userInfo.classList.remove('hidden');
-            
             if (els.userDisplay) {
                 els.userDisplay.textContent = this.currentUser.username;
                 if (this.currentUser.classCode) els.userDisplay.textContent += ` [${this.currentUser.classCode}]`;
             }
-
             if (els.roleBadge) {
                 els.roleBadge.textContent = this.currentUser.role === 'admin' ? '관리자' : (this.currentUser.role === 'loading' ? '로딩중...' : '학생');
                 els.roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
             }
-            
             if (this.currentUser.role === 'admin') {
                 if (els.simulationLink) els.simulationLink.classList.remove('hidden');
                 if (els.adminMenu) els.adminMenu.classList.remove('hidden');
@@ -357,188 +535,14 @@ class AuthManager {
         }
     }
 
-    async login() {
-        const usernameInput = document.getElementById('login-username');
-        const passwordInput = document.getElementById('login-password');
-        if (!usernameInput || !passwordInput) return;
-
-        const username = usernameInput.value.trim();
-        const pass = passwordInput.value;
-        const email = (username.includes('@')) ? username : `${username.toLowerCase()}@school-economy.local`;
-
-        try {
-            await auth.signInWithEmailAndPassword(email, pass);
-            this.closeModal();
-            // Force reload to clear any cache/state
-            window.location.reload();
-        } catch (error) {
-            alert('아이디 또는 비밀번호가 틀렸습니다.');
-        }
-    }
-
-    async signup() {
-        const role = document.getElementById('signup-role').value;
-        const pass = document.getElementById('signup-password').value;
-        const adminEmail = document.getElementById('signup-email').value.trim();
-        let username = document.getElementById('signup-username').value.trim().toLowerCase();
-        const studentClassCode = document.getElementById('signup-class-code').value.trim().toUpperCase();
-
-        if (pass.length < 6) {
-            alert('비밀번호는 최소 6자 이상이어야 합니다.');
-            return;
-        }
-
-        if (role === 'student' && !username) {
-            alert('아이디를 입력해 주세요.');
-            return;
-        }
-
-        // 학생 가입 시 학급 코드 검증 (classes 컬렉션에서 확인)
-        if (role === 'student') {
-            try {
-                const classDoc = await db.collection('classes').doc(studentClassCode).get();
-                if (!classDoc.exists) {
-                    alert('유효하지 않은 학급 코드입니다. 관리자에게 확인해 주세요.');
-                    return;
-                }
-            } catch (err) {
-                alert('학급 코드 확인 중 오류가 발생했습니다: ' + err.message);
-                return;
-            }
-        }
-
-        // 관리자는 이메일 앞부분을 아이디로 자동 설정
-        if (role === 'admin') {
-            if (!adminEmail) {
-                alert('이메일을 입력해 주세요.');
-                return;
-            }
-            username = adminEmail.split('@')[0];
-        }
-
-        const email = role === 'admin' ? adminEmail : `${username}@school-economy.local`;
-
-        try {
-            const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
-            const user = userCredential.user;
-            
-            let classCode = null;
-            if (role === 'admin') {
-                // 관리자는 새로운 학급 코드 생성 및 classes 컬렉션 등록
-                classCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-                await db.collection('classes').doc(classCode).set({
-                    adminUid: user.uid,
-                    adminEmail: email,
-                    className: `${username} 선생님의 학급`,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-
-            // 사용자 정보 저장
-            await db.collection('users').doc(user.uid).set({
-                username: username,
-                role: role,
-                email: email,
-                classCode: role === 'admin' ? classCode : studentClassCode,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            await db.collection('playerData').doc(user.uid).set({
-                cash: 1000,
-                bankBalance: 0,
-                goods: 0,
-                portfolio: {}
-            });
-
-            if (role === 'student') {
-                alert('회원가입이 완료되었습니다! 로그인해 주세요.');
-            } else {
-                alert(`회원가입 완료! 관리자 계정은 이메일로 로그인하세요.\n학급 코드: [${classCode}] (내 정보에서 확인 가능)`);
-            }
-            
-            this.closeModal();
-        } catch (error) {
-            console.error("Signup Error:", error);
-            let msg = '회원가입 실패: ' + error.message;
-            if (error.code === 'auth/email-already-in-use') {
-                msg = role === 'student' ? '이미 존재하는 아이디입니다.' : '이미 사용 중인 이메일입니다.';
-            } else if (error.code === 'auth/invalid-email') {
-                msg = '유효하지 않은 이메일 형식입니다.';
-            } else if (error.code === 'auth/weak-password') {
-                msg = '비밀번호가 너무 취약합니다.';
-            }
-            alert(msg);
-        }
-    }
-
-    async logout() {
-        try {
-            await auth.signOut();
-            alert('로그아웃 되었습니다.');
-        } catch (error) {
-            console.error('Logout Error:', error);
-        }
-    }
-
-    updateUI() {
-        console.log("updateUI 호출됨. 현재 사용자:", this.currentUser);
-        try {
-            const loginBtn = document.getElementById('login-btn');
-            const signupBtn = document.getElementById('signup-btn');
-            const userInfo = document.getElementById('user-info');
-            const userDisplay = document.getElementById('user-display-name');
-            const roleBadge = document.getElementById('user-role-badge');
-            const simulationLink = document.getElementById('simulation-link');
-            const adminMenu = document.getElementById('admin-menu');
-
-            if (this.currentUser) {
-                if (loginBtn) loginBtn.classList.add('hidden');
-                if (signupBtn) signupBtn.classList.add('hidden');
-                if (userInfo) userInfo.classList.remove('hidden');
-                
-                if (userDisplay) {
-                    userDisplay.textContent = this.currentUser.username;
-                    if (this.currentUser.role === 'admin' && this.currentUser.classCode) {
-                        userDisplay.textContent += ` [코드: ${this.currentUser.classCode}]`;
-                    }
-                }
-
-                if (roleBadge) {
-                    roleBadge.textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
-                    roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
-                }
-                
-                if (this.currentUser.role === 'admin') {
-                    if (simulationLink) simulationLink.classList.remove('hidden');
-                    if (adminMenu) adminMenu.classList.remove('hidden');
-                    const mgmtCode = document.getElementById('mgmt-class-code');
-                    if (mgmtCode) mgmtCode.textContent = this.currentUser.classCode;
-                    this.loadStudentList();
-                } else {
-                    if (simulationLink) simulationLink.classList.add('hidden');
-                    if (adminMenu) adminMenu.classList.add('hidden');
-                }
-            } else {
-                if (loginBtn) loginBtn.classList.remove('hidden');
-                if (signupBtn) signupBtn.classList.remove('hidden');
-                if (userInfo) userInfo.classList.add('hidden');
-                if (simulationLink) simulationLink.classList.add('hidden');
-                if (adminMenu) adminMenu.classList.add('hidden');
-            }
-        } catch (err) {
-            console.error("UI 업데이트 중 에러 발생:", err);
-        }
-    }
-
     async loadStudentList() {
         if (!this.currentUser || this.currentUser.role !== 'admin') return;
-
         const tbody = document.getElementById('student-list-body');
+        if (!tbody) return;
         const snapshot = await db.collection('users')
             .where('role', '==', 'student')
             .where('classCode', '==', this.currentUser.classCode)
             .get();
-
         tbody.innerHTML = '';
         snapshot.forEach(doc => {
             const data = doc.data();
@@ -557,28 +561,16 @@ class AuthManager {
 
 function setupNavigation() {
     const navLinks = document.querySelectorAll('.sidebar a');
-    const views = document.querySelectorAll('.view');
-
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
-            if (link.id === 'securities-link') return; // Don't prevent default for parents if needed, but here we use IDs
-            
+            if (link.id === 'securities-link') return;
             e.preventDefault();
-
-            // Remove active class from current active link and view
             document.querySelector('.sidebar a.active')?.classList.remove('active');
             document.querySelector('.view.active')?.classList.remove('active');
-
-            // Add active class to clicked link
             link.classList.add('active');
-
-            // Determine which view to show
             const targetViewId = link.id.replace('-link', '-view');
             const targetView = document.getElementById(targetViewId);
-
-            if (targetView) {
-                targetView.classList.add('active');
-            }
+            if (targetView) targetView.classList.add('active');
         });
     });
 }
@@ -590,38 +582,26 @@ class EconomicSimulation {
         this.goods = 0;
         this.bankBalance = 0;
         this.portfolio = {};
-        
         this.price = 10;
-        this.productionCost = 50;
         this.interestRate = 0.025;
         this.currentStockSymbol = null;
         this.currentStockPrice = 0;
-
-        this.resourcesPanel = document.querySelector('resources-panel');
-        this.actionsPanel = document.querySelector('actions-panel');
-        this.marketPanel = document.querySelector('market-panel');
-        this.logPanel = document.querySelector('log-panel');
-
         this.initEvents();
-        this.startIntervals();
-    }
-
-    initEvents() {
-        this.actionsPanel.shadowRoot.getElementById('produce-btn').addEventListener('click', () => this.produce());
-        this.actionsPanel.shadowRoot.getElementById('trade-btn').addEventListener('click', () => this.sell());
-
-        document.getElementById('deposit-btn').addEventListener('click', () => this.deposit());
-        document.getElementById('withdraw-btn').addEventListener('click', () => this.withdraw());
-
-        document.getElementById('load-stock-btn').addEventListener('click', () => this.loadStock());
-        document.getElementById('buy-stock-btn').addEventListener('click', () => this.buyStock());
-        document.getElementById('sell-stock-btn').addEventListener('click', () => this.sellStock());
-    }
-
-    startIntervals() {
         setInterval(() => this.updateMarket(), 2000);
         setInterval(() => this.updateSimulationStockPrices(), 5000);
         setInterval(() => this.calculateInterest(), 10000);
+    }
+
+    initEvents() {
+        const prodBtn = document.querySelector('actions-panel')?.shadowRoot.getElementById('produce-btn');
+        const sellBtn = document.querySelector('actions-panel')?.shadowRoot.getElementById('trade-btn');
+        if (prodBtn) prodBtn.addEventListener('click', () => this.produce());
+        if (sellBtn) sellBtn.addEventListener('click', () => this.sell());
+        document.getElementById('deposit-btn')?.addEventListener('click', () => this.deposit());
+        document.getElementById('withdraw-btn')?.addEventListener('click', () => this.withdraw());
+        document.getElementById('load-stock-btn')?.addEventListener('click', () => this.loadStock());
+        document.getElementById('buy-stock-btn')?.addEventListener('click', () => this.buyStock());
+        document.getElementById('sell-stock-btn')?.addEventListener('click', () => this.sellStock());
     }
 
     async loadUserData(uid) {
@@ -635,7 +615,6 @@ class EconomicSimulation {
             this.portfolio = data.portfolio || {};
             this.updateUI();
         } else {
-            // New user initialization
             this.resetData();
             await this.saveUserData();
         }
@@ -644,38 +623,23 @@ class EconomicSimulation {
     async saveUserData() {
         if (!this.uid) return;
         await db.collection('playerData').doc(this.uid).set({
-            cash: this.cash,
-            goods: this.goods,
-            bankBalance: this.bankBalance,
-            portfolio: this.portfolio,
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+            cash: this.cash, goods: this.goods, bankBalance: this.bankBalance,
+            portfolio: this.portfolio, lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         });
     }
 
     resetData() {
-        this.uid = null;
-        this.cash = 0;
-        this.goods = 0;
-        this.bankBalance = 0;
-        this.portfolio = {};
+        this.uid = null; this.cash = 0; this.goods = 0; this.bankBalance = 0; this.portfolio = {};
         this.updateUI();
     }
 
-    // Bank Logic
     async deposit() {
         if (!this.uid) return alert('로그인이 필요합니다.');
         const amount = parseInt(document.getElementById('bank-amount').value);
         if (isNaN(amount) || amount <= 0) return;
-
         if (this.cash >= amount) {
-            this.cash -= amount;
-            this.bankBalance += amount;
-            this.logPanel.addMessage(`은행에 ₩${amount.toLocaleString()}을 예금했습니다.`);
-            document.getElementById('bank-amount').value = '';
-            this.updateUI();
-            await this.saveUserData();
-        } else {
-            this.logPanel.addMessage('보유 현금이 부족하여 예금할 수 없습니다.');
+            this.cash -= amount; this.bankBalance += amount;
+            this.updateUI(); await this.saveUserData();
         }
     }
 
@@ -683,16 +647,9 @@ class EconomicSimulation {
         if (!this.uid) return alert('로그인이 필요합니다.');
         const amount = parseInt(document.getElementById('bank-amount').value);
         if (isNaN(amount) || amount <= 0) return;
-
         if (this.bankBalance >= amount) {
-            this.bankBalance -= amount;
-            this.cash += amount;
-            this.logPanel.addMessage(`은행에서 ₩${amount.toLocaleString()}을 출금했습니다.`);
-            document.getElementById('bank-amount').value = '';
-            this.updateUI();
-            await this.saveUserData();
-        } else {
-            this.logPanel.addMessage('예금 잔액이 부족하여 출금할 수 없습니다.');
+            this.bankBalance -= amount; this.cash += amount;
+            this.updateUI(); await this.saveUserData();
         }
     }
 
@@ -700,88 +657,58 @@ class EconomicSimulation {
         if (this.uid && this.bankBalance > 0) {
             const interest = Math.floor(this.bankBalance * this.interestRate);
             if (interest > 0) {
-                this.bankBalance += interest;
-                this.logPanel.addMessage(`은행 이자가 ₩${interest.toLocaleString()} 발생했습니다.`);
-                this.updateUI();
-                await this.saveUserData();
+                this.bankBalance += interest; this.updateUI(); await this.saveUserData();
             }
         }
     }
 
     async produce() {
         if (!this.uid) return alert('로그인이 필요합니다.');
-        if (this.cash >= this.productionCost) {
-            this.cash -= this.productionCost;
-            this.goods++;
-            this.logPanel.addMessage(`상품 1개를 ₩${this.productionCost}에 생산했습니다.`);
-            this.updateUI();
-            await this.saveUserData();
-        } else {
-            this.logPanel.addMessage('생산에 필요한 현금이 부족합니다.');
+        if (this.cash >= 50) {
+            this.cash -= 50; this.goods++; this.updateUI(); await this.saveUserData();
         }
     }
 
     async sell() {
         if (!this.uid) return alert('로그인이 필요합니다.');
         if (this.goods > 0) {
-            this.cash += this.price;
-            this.goods--;
-            this.logPanel.addMessage(`상품 1개를 ₩${this.price.toFixed(2)}에 판매했습니다.`);
-            this.updateUI();
-            await this.saveUserData();
-        } else {
-            this.logPanel.addMessage('판매할 상품이 없습니다.');
+            this.cash += this.price; this.goods--; this.updateUI(); await this.saveUserData();
         }
     }
 
     updateMarket() {
-        const change = (Math.random() - 0.5) * 2;
-        this.price = Math.max(1, this.price + change);
+        this.price = Math.max(1, this.price + (Math.random() - 0.5) * 2);
         this.updateUI();
     }
 
-    // Stock Market Logic
     loadStock() {
         const symbol = document.getElementById('stock-symbol').value.toUpperCase().trim();
         if (!symbol) return;
-
         this.currentStockSymbol = symbol;
         const container = document.getElementById('stock-chart-container');
-        container.innerHTML = ''; 
-
+        if (container) container.innerHTML = ''; 
         const script = document.createElement('script');
         script.src = "https://s3.tradingview.com/tv.js";
         script.async = true;
         script.onload = () => {
             if (typeof TradingView !== 'undefined') {
                 new TradingView.widget({
-                    "width": "100%",
-                    "height": "100%",
-                    "symbol": symbol,
-                    "interval": "D",
-                    "timezone": "Etc/UTC",
-                    "theme": "dark",
-                    "style": "1",
-                    "locale": "kr",
-                    "toolbar_bg": "#f1f3f6",
-                    "enable_publishing": false,
-                    "allow_symbol_change": true,
+                    "width": "100%", "height": "100%", "symbol": symbol, "interval": "D",
+                    "timezone": "Etc/UTC", "theme": "dark", "style": "1", "locale": "kr",
+                    "toolbar_bg": "#f1f3f6", "enable_publishing": false, "allow_symbol_change": true,
                     "container_id": "stock-chart-container"
                 });
             }
         };
         document.head.appendChild(script);
-
         document.getElementById('display-stock-name').textContent = symbol;
         this.currentStockPrice = 100 + Math.random() * 900; 
-        this.logPanel.addMessage(`${symbol} 차트를 불러왔습니다.`);
         this.updateUI();
     }
 
     updateSimulationStockPrices() {
         if (this.currentStockSymbol) {
-            const volatility = 0.02;
-            this.currentStockPrice *= (1 + (Math.random() - 0.5) * volatility);
+            this.currentStockPrice *= (1 + (Math.random() - 0.5) * 0.02);
             this.updateUI();
         }
     }
@@ -790,27 +717,14 @@ class EconomicSimulation {
         if (!this.uid) return alert('로그인이 필요합니다.');
         const amount = parseInt(document.getElementById('trade-amount').value);
         if (!this.currentStockSymbol || isNaN(amount) || amount <= 0) return;
-
         const totalCost = this.currentStockPrice * amount;
         if (this.cash >= totalCost) {
             this.cash -= totalCost;
-            
-            if (!this.portfolio[this.currentStockSymbol]) {
-                this.portfolio[this.currentStockSymbol] = { amount: 0, avgPrice: 0 };
-            }
-            
+            if (!this.portfolio[this.currentStockSymbol]) this.portfolio[this.currentStockSymbol] = { amount: 0, avgPrice: 0 };
             const p = this.portfolio[this.currentStockSymbol];
-            const newTotalAmount = p.amount + amount;
-            const newAvgPrice = (p.amount * p.avgPrice + totalCost) / newTotalAmount;
-            
-            p.amount = newTotalAmount;
-            p.avgPrice = newAvgPrice;
-            
-            this.logPanel.addMessage(`${this.currentStockSymbol} ${amount}주를 ₩${this.currentStockPrice.toFixed(2)}에 매수했습니다.`);
-            this.updateUI();
-            await this.saveUserData();
-        } else {
-            this.logPanel.addMessage('주식 매수에 필요한 현금이 부족합니다.');
+            p.avgPrice = (p.amount * p.avgPrice + totalCost) / (p.amount + amount);
+            p.amount += amount;
+            this.updateUI(); await this.saveUserData();
         }
     }
 
@@ -818,47 +732,30 @@ class EconomicSimulation {
         if (!this.uid) return alert('로그인이 필요합니다.');
         const amount = parseInt(document.getElementById('trade-amount').value);
         if (!this.currentStockSymbol || !this.portfolio[this.currentStockSymbol] || isNaN(amount) || amount <= 0) return;
-
         const p = this.portfolio[this.currentStockSymbol];
         if (p.amount >= amount) {
-            const gain = this.currentStockPrice * amount;
-            this.cash += gain;
+            this.cash += this.currentStockPrice * amount;
             p.amount -= amount;
-            
             if (p.amount === 0) delete this.portfolio[this.currentStockSymbol];
-            
-            this.logPanel.addMessage(`${this.currentStockSymbol} ${amount}주를 ₩${this.currentStockPrice.toFixed(2)}에 매도했습니다.`);
-            this.updateUI();
-            await this.saveUserData();
-        } else {
-            this.logPanel.addMessage('보유 수량이 부족하여 매도할 수 없습니다.');
+            this.updateUI(); await this.saveUserData();
         }
     }
 
     updateUI() {
-        if (this.resourcesPanel) this.resourcesPanel.update(Math.floor(this.cash), this.goods);
-        if (this.marketPanel) this.marketPanel.update(this.price);
-
-        document.getElementById('current-cash').textContent = Math.floor(this.cash).toLocaleString();
-        document.getElementById('current-bank-balance').textContent = Math.floor(this.bankBalance).toLocaleString();
-        document.getElementById('current-goods').textContent = this.goods;
-        
+        document.querySelector('resources-panel')?.update(Math.floor(this.cash), this.goods);
+        document.querySelector('market-panel')?.update(this.price);
+        const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        setEl('current-cash', Math.floor(this.cash).toLocaleString());
+        setEl('current-bank-balance', Math.floor(this.bankBalance).toLocaleString());
+        setEl('current-goods', this.goods);
         let stockValue = 0;
         for (const sym in this.portfolio) {
             stockValue += this.portfolio[sym].amount * (sym === this.currentStockSymbol ? this.currentStockPrice : this.portfolio[sym].avgPrice);
         }
-        
-        document.getElementById('current-stock-value').textContent = Math.floor(stockValue).toLocaleString();
-        const totalAssets = this.cash + this.bankBalance + stockValue;
-        document.getElementById('total-assets').textContent = Math.floor(totalAssets).toLocaleString();
-
-        const bankBalanceEl = document.getElementById('bank-balance-amount');
-        if (bankBalanceEl) bankBalanceEl.textContent = Math.floor(this.bankBalance).toLocaleString();
-
-        if (this.currentStockSymbol) {
-            document.getElementById('current-stock-price').textContent = this.currentStockPrice.toFixed(2);
-        }
-
+        setEl('current-stock-value', Math.floor(stockValue).toLocaleString());
+        setEl('total-assets', Math.floor(this.cash + this.bankBalance + stockValue).toLocaleString());
+        setEl('bank-balance-amount', Math.floor(this.bankBalance).toLocaleString());
+        if (this.currentStockSymbol) setEl('current-stock-price', this.currentStockPrice.toFixed(2));
         const tbody = document.getElementById('portfolio-body');
         if (tbody) {
             tbody.innerHTML = '';
@@ -866,17 +763,8 @@ class EconomicSimulation {
                 const p = this.portfolio[sym];
                 const curPrice = (sym === this.currentStockSymbol ? this.currentStockPrice : p.avgPrice);
                 const roi = ((curPrice - p.avgPrice) / p.avgPrice * 100).toFixed(2);
-                const evalVal = p.amount * curPrice;
-                
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${sym}</td>
-                    <td>${p.amount}</td>
-                    <td>₩${p.avgPrice.toFixed(2)}</td>
-                    <td>₩${curPrice.toFixed(2)}</td>
-                    <td class="${roi >= 0 ? 'up-trend' : 'down-trend'}">${roi}%</td>
-                    <td>₩${Math.floor(evalVal).toLocaleString()}</td>
-                `;
+                tr.innerHTML = `<td>${sym}</td><td>${p.amount}</td><td>₩${p.avgPrice.toFixed(2)}</td><td>₩${curPrice.toFixed(2)}</td><td class="${roi >= 0 ? 'up-trend' : 'down-trend'}">${roi}%</td><td>₩${Math.floor(p.amount * curPrice).toLocaleString()}</td>`;
                 tbody.appendChild(tr);
             }
         }
@@ -884,17 +772,13 @@ class EconomicSimulation {
 }
 
 window.deleteStudentAccount = async (uid, username) => {
-    if (confirm(`[${username}] 학생의 계정을 삭제하시겠습니까? 학생이 다시 가입해야 합니다.`)) {
+    if (confirm(`[${username}] 학생의 계정을 삭제하시겠습니까?`)) {
         try {
-            // Note: Cloud Firestore deletion. Actual Auth user deletion requires Admin SDK or Cloud Functions.
-            // For this simulation, we'll mark as deleted or remove from Firestore.
             await db.collection('users').doc(uid).delete();
             await db.collection('playerData').doc(uid).delete();
             alert('계정 정보가 삭제되었습니다.');
-            location.reload(); // Refresh to update list
-        } catch (error) {
-            alert('삭제 실패: ' + error.message);
-        }
+            location.reload();
+        } catch (error) { alert('삭제 실패: ' + error.message); }
     }
 };
 
