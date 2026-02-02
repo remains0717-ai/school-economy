@@ -31,6 +31,13 @@ service cloud.firestore {
         allow read: if true;
         allow create: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
+
+      // 활동 로그 (신규)
+      match /activityLogs/{logId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
     }
 
     // [3] 상점 아이템(items)

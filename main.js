@@ -46,6 +46,11 @@ function renderLogs(logs) {
     if (!body) return;
     body.innerHTML = '';
 
+    if (!logs || logs.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:#666;">기록된 활동 로그가 없습니다.</td></tr>';
+        return;
+    }
+
     logs.forEach(l => {
         const date = l.timestamp?.toDate().toLocaleString() || '-';
         let typeColor = '#888';
@@ -1527,8 +1532,11 @@ window.sendBulkItems = async () => {
 
         const batch = db.batch();
         selected.forEach(cb => {
-            batch.set(db.collection('users').doc(cb.value).collection('inventory').doc(), {
-                itemName: item.name, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            const studentInvRef = db.collection('users').doc(cb.value).collection('inventory').doc();
+            batch.set(studentInvRef, {
+                itemName: item.name, 
+                price: item.price, 
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
         });
         batch.update(iRef, { stock: firebase.firestore.FieldValue.increment(-selected.length) });
@@ -1539,27 +1547,79 @@ window.sendBulkItems = async () => {
         
         await batch.commit();
         alert("선물 완료!");
-    } catch (err) { alert(err.message); }
+        logActivity('admin', `${selected.length}명에게 [${item.name}] 대량 선물`);
+    } catch (err) { alert("선물 실패: " + err.message); }
 };
 
-window.saveShopSettings = async () => {
-    const refundEnabled = document.getElementById('config-refund-enabled').checked;
-    const refundDays = parseInt(document.getElementById('config-refund-days').value) || 0;
-    const code = (window.userState.currentUser.classCode || window.userState.currentUser.adminCode).trim().toUpperCase();
+window.giftItem = async (itemId, itemName, price, targetUid, targetName) => {
+    if (!targetUid) return alert("선물할 대상을 선택하세요.");
+    if (targetUid === window.userState.currentUser.uid) return alert("자기 자신에게는 선물할 수 없습니다.");
+    if (!confirm(`[${itemName}]을 ${targetName}님에게 선물하시겠습니까?`)) return;
 
     try {
-        await db.collection('classes').doc(code).update({
-            shopConfig: { refundEnabled, refundDays }
+        const senderUid = window.userState.currentUser.uid;
+        const senderInvRef = db.collection('users').doc(senderUid).collection('inventory').doc(itemId);
+        const receiverInvRef = db.collection('users').doc(targetUid).collection('inventory').doc();
+
+        await db.runTransaction(async (t) => {
+            const itemDoc = await t.get(senderInvRef);
+            if (!itemDoc.exists) throw new Error("아이템을 찾을 수 없습니다.");
+            
+            // 보낸 사람 인벤토리에서 삭제
+            t.delete(senderInvRef);
+            // 받는 사람 인벤토리에 추가
+            t.set(receiverInvRef, {
+                itemName,
+                price,
+                timestamp: firebase.firestore.Timestamp.now(),
+                from: window.userState.currentUser.nickname || window.userState.currentUser.username
+            });
         });
-        alert("상점 설정이 저장되었습니다.");
-    } catch (err) { alert("저장 실패: " + err.message); }
+
+        alert(`${targetName}님에게 선물을 보냈습니다!`);
+        document.getElementById('item-detail-modal').style.display = 'none';
+        logActivity('shop', `${targetName}님에게 [${itemName}] 선물`);
+    } catch (err) { alert("선물 실패: " + err.message); }
 };
 
-window.openItemDetail = (group) => {
+window.openItemDetail = async (group) => {
     const modal = document.getElementById('item-detail-modal');
     const body = document.getElementById('item-detail-body');
+    const giftSection = document.getElementById('gift-section');
+    const refundSection = document.getElementById('refund-section');
     const config = window.userState.classData?.shopConfig || {};
+    const currentUser = window.userState.currentUser;
     
+    // (1) 기본 정보 표시
+    body.innerHTML = `
+        <h3 style="color:var(--primary); font-size:1.5rem;">${group.itemName}</h3>
+        <p style="color:#888;">보유 수량: ${group.count}개</p>
+        <p style="color:#888;">구매가: ₩${group.price.toLocaleString()}</p>
+    `;
+
+    // (2) 선물하기 섹션 구성
+    giftSection.style.display = 'block';
+    const giftSelect = document.getElementById('gift-target-user');
+    const giftBtn = document.getElementById('gift-action-btn');
+    
+    // 학급 인원 불러오기
+    const code = (currentUser.classCode || currentUser.adminCode).trim().toUpperCase();
+    const userSnap = await db.collection('users').where('adminCode', '==', code).get();
+    giftSelect.innerHTML = '<option value="">받는 사람 선택</option>';
+    userSnap.forEach(doc => {
+        const d = doc.data();
+        if (doc.id !== currentUser.uid) {
+            giftSelect.innerHTML += `<option value="${doc.id}">${d.nickname || d.username}</option>`;
+        }
+    });
+
+    giftBtn.onclick = () => {
+        const targetUid = giftSelect.value;
+        const targetName = giftSelect.options[giftSelect.selectedIndex].text;
+        window.giftItem(group.ids[0], group.itemName, group.price, targetUid, targetName);
+    };
+
+    // (3) 환불 섹션 구성 (하단으로 이동)
     const now = new Date();
     const purchaseDate = group.latestDate;
     const diffDays = purchaseDate ? Math.floor((now - purchaseDate) / (1000 * 60 * 60 * 24)) : 999;
@@ -1569,25 +1629,18 @@ window.openItemDetail = (group) => {
     if (config.refundEnabled) {
         if (canRefund) {
             refundHtml = `
-                <div style="margin-top:20px; padding:15px; border:1px solid var(--danger); border-radius:10px;">
-                    <p style="color:var(--danger); font-size:0.9rem;">환불 가능 (${config.refundDays}일 이내)</p>
+                <div style="margin-top:10px; padding:10px; border:1px solid #444; border-radius:10px; background:rgba(255,255,255,0.02);">
+                    <p style="color:#888; font-size:0.8rem;">환불 기간: ${config.refundDays}일 이내 (현재 ${diffDays}일째)</p>
                     <button onclick="window.simulation.refundItem('${group.ids[0]}', '${group.itemName}', ${group.price})" 
-                            class="submit-btn" style="background:var(--danger); color:white; margin-top:10px;">환불하기 (1개)</button>
+                            class="submit-btn" style="background:#444; color:var(--danger); margin-top:5px; padding:8px;">환불하기</button>
                 </div>
             `;
         } else {
-            refundHtml = `<p style="color:#666; font-size:0.85rem; margin-top:20px;">환불 기간이 지났습니다. (구매 후 ${diffDays}일 경과)</p>`;
+            refundHtml = `<p style="color:#555; font-size:0.75rem; margin-top:10px;">환불 기간 경과 (${diffDays}일)</p>`;
         }
-    } else {
-        refundHtml = `<p style="color:#666; font-size:0.85rem; margin-top:20px;">현재 상점 환불 기능이 비활성화되어 있습니다.</p>`;
     }
+    refundSection.innerHTML = refundHtml;
 
-    body.innerHTML = `
-        <h3 style="color:var(--primary); font-size:1.5rem;">${group.itemName}</h3>
-        <p style="color:#888;">보유 수량: ${group.count}개</p>
-        <p style="color:#888;">구매가: ₩${group.price.toLocaleString()}</p>
-        ${refundHtml}
-    `;
     modal.style.display = 'block';
 };
 
