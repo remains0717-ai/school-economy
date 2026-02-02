@@ -137,7 +137,6 @@ class AuthManager {
         
         document.getElementById('signup-role')?.addEventListener('change', (e) => {
             const isStudent = e.target.value === 'student';
-            document.getElementById('signup-email')?.classList.toggle('hidden', isStudent);
             document.getElementById('signup-class-code-container')?.classList.toggle('hidden', !isStudent);
         });
 
@@ -413,7 +412,6 @@ class AuthManager {
     async signup() {
         const role = document.getElementById('signup-role').value;
         const pass = document.getElementById('signup-password').value;
-        const email = document.getElementById('signup-email').value.trim();
         const username = document.getElementById('signup-username').value.trim().toLowerCase();
         const code = document.getElementById('signup-class-code').value.trim().toUpperCase();
 
@@ -422,7 +420,7 @@ class AuthManager {
                 const classDoc = await db.collection('classes').doc(code).get();
                 if (!classDoc.exists) return alert("학급 코드가 존재하지 않습니다.");
             }
-            const finalEmail = role === 'admin' ? email : `${username}@student.com`;
+            const finalEmail = username.includes('@') ? username : `${username}@student.com`;
             const cred = await auth.createUserWithEmailAndPassword(finalEmail, pass);
             
             let classCode = role === 'admin' ? Math.random().toString(36).substring(2, 8).toUpperCase() : "";
