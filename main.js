@@ -316,7 +316,7 @@ class AuthManager {
         auth.onAuthStateChanged(async (user) => {
             console.log("Auth Status Changed:", user ? user.email : "No User");
             if (user) {
-                this.currentUser = { uid: user.uid, username: user.email.split('@')[0], role: 'loading', classCode: null };
+                this.currentUser = { uid: user.uid, username: user.email.split('@')[0], role: 'loading', isAuthorized: false };
                 this.updateUI();
 
                 try {
@@ -327,16 +327,15 @@ class AuthManager {
                             uid: user.uid, 
                             username: userData.username || user.email.split('@')[0], 
                             role: userData.role || 'student',
-                            classCode: userData.classCode || null
+                            classCode: userData.classCode || null,
+                            adminCode: userData.adminCode || null,
+                            nickname: userData.nickname || "",
+                            isAuthorized: userData.isAuthorized || false 
                         };
                         if (this.simulation) this.simulation.loadUserData(user.uid);
-                    } else {
-                        console.warn("User document missing. Fallback to student.");
-                        this.currentUser.role = 'student';
                     }
                 } catch (error) {
                     console.error("Firestore loading error:", error);
-                    this.currentUser.role = 'student';
                 }
             } else {
                 this.currentUser = null;
@@ -344,195 +343,6 @@ class AuthManager {
             }
             this.updateUI();
         });
-    }
-
-    closeModal() {
-        if (this.modal) this.modal.style.display = 'none';
-        
-        const loginForm = document.getElementById('login-form');
-        const signupForm = document.getElementById('signup-form');
-        if (loginForm) loginForm.reset();
-        if (signupForm) signupForm.reset();
-
-        const signupEmail = document.getElementById('signup-email');
-        const signupUsernameContainer = document.getElementById('signup-username-container');
-        const classCodeContainer = document.getElementById('signup-class-code-container');
-
-        if (signupEmail) signupEmail.classList.add('hidden');
-        if (signupUsernameContainer) signupUsernameContainer.classList.remove('hidden');
-        if (classCodeContainer) classCodeContainer.classList.remove('hidden');
-    }
-
-    openModal(mode) {
-        if (this.modal) this.modal.style.display = 'block';
-        this.switchMode(mode);
-    }
-
-    switchMode(mode) {
-        if (mode === 'login') {
-            this.loginContainer.classList.remove('hidden');
-            this.signupContainer.classList.add('hidden');
-            this.toggleText.innerHTML = `계정이 없으신가요? <a href="#" id="toggle-to-signup">회원가입</a>`;
-        } else {
-            this.loginContainer.classList.add('hidden');
-            this.signupContainer.classList.remove('hidden');
-            this.toggleText.innerHTML = `이미 계정이 있으신가요? <a href="#" id="toggle-to-login">로그인</a>`;
-            
-            const cc = document.getElementById('signup-class-code-container');
-            const un = document.getElementById('signup-username-container');
-            const em = document.getElementById('signup-email');
-            const ccInput = document.getElementById('signup-class-code');
-            const unInput = document.getElementById('signup-username');
-            const emInput = document.getElementById('signup-email');
-
-            if (cc) cc.classList.remove('hidden');
-            if (un) un.classList.remove('hidden');
-            if (em) em.classList.add('hidden');
-            
-            // 필수 입력 상태 초기화 (학생 기준)
-            if (ccInput) ccInput.required = true;
-            if (unInput) unInput.required = true;
-            if (emInput) emInput.required = false;
-
-            const roleSelect = document.getElementById('signup-role');
-            if (roleSelect) roleSelect.value = 'student';
-        }
-        
-        const newToggle = mode === 'login' ? document.getElementById('toggle-to-signup') : document.getElementById('toggle-to-login');
-        if (newToggle) {
-            newToggle.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.switchMode(mode === 'login' ? 'signup' : 'login');
-            });
-        }
-    }
-
-    async login() {
-        const usernameInput = document.getElementById('login-username');
-        const passwordInput = document.getElementById('login-password');
-        if (!usernameInput || !passwordInput) return;
-
-        const username = usernameInput.value.trim();
-        const pass = passwordInput.value;
-        
-        // [수정] 학생 가입 도메인 @student.com으로 통일
-        const email = (username.includes('@')) ? username : `${username.toLowerCase()}@student.com`;
-
-        try {
-            await auth.signInWithEmailAndPassword(email, pass);
-            this.closeModal();
-            window.location.reload();
-        } catch (error) {
-            console.error("Login Error:", error.code);
-            alert('아이디 또는 비밀번호가 틀렸습니다.');
-        }
-    }
-
-    async signup() {
-        try {
-            const roleSelect = document.getElementById('signup-role');
-            const passInput = document.getElementById('signup-password');
-            const emailInput = document.getElementById('signup-email');
-            const usernameInput = document.getElementById('signup-username');
-            const classCodeInput = document.getElementById('signup-class-code');
-
-            const role = roleSelect ? roleSelect.value : 'student';
-            const pass = passInput ? passInput.value : '';
-            const adminEmail = emailInput ? emailInput.value.trim() : '';
-            let username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
-            const inputCode = classCodeInput ? classCodeInput.value.trim().toUpperCase() : '';
-
-            if (pass.length < 6) {
-                alert('비밀번호는 최소 6자 이상이어야 합니다.');
-                return;
-            }
-
-            if (role === 'student' && !username) {
-                alert('아이디를 입력해 주세요.');
-                return;
-            }
-
-            if (role === 'student' && !inputCode) {
-                alert('학급 코드를 입력해 주세요.');
-                return;
-            }
-
-            // 학급 코드 검증
-            if (role === 'student') {
-                const classDoc = await db.collection('classes').doc(inputCode).get();
-                if (!classDoc.exists) {
-                    alert('유효하지 않은 학급 코드입니다. 선생님께 확인해 주세요.');
-                    return;
-                }
-            }
-
-            if (role === 'admin') {
-                if (!adminEmail || !adminEmail.includes('@')) {
-                    alert('올바른 관리자 이메일을 입력해 주세요.');
-                    return;
-                }
-                username = adminEmail.split('@')[0];
-            }
-            
-            const finalEmail = role === 'admin' ? adminEmail : `${username}@student.com`;
-
-            // Firebase Auth 가입
-            const userCredential = await auth.createUserWithEmailAndPassword(finalEmail, pass);
-            const user = userCredential.user;
-
-            // Firestore 데이터 작성
-            let generatedClassCode = null;
-            if (role === 'admin') {
-                generatedClassCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-                await db.collection('classes').doc(generatedClassCode).set({
-                    adminUid: user.uid,
-                    adminEmail: finalEmail,
-                    className: `${username} 선생님의 학급`,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-
-            await db.collection('users').doc(user.uid).set({
-                username: username,
-                role: role,
-                email: finalEmail,
-                classCode: role === 'admin' ? generatedClassCode : "",
-                adminCode: role === 'student' ? inputCode : "",
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            await db.collection('playerData').doc(user.uid).set({
-                cash: 1000,
-                bankBalance: 0,
-                goods: 0,
-                portfolio: {}
-            });
-
-            if (role === 'student') {
-                alert('회원가입이 완료되었습니다! 이제 로그인을 해주세요.');
-            } else {
-                alert(`관리자 가입 완료!\n학급 코드는 [${generatedClassCode}] 입니다.\n(내 정보에서 상시 확인 가능)`);
-            }
-
-            await auth.signOut();
-            this.closeModal();
-            window.location.reload();
-
-        } catch (error) {
-            console.error("Signup Error:", error);
-            let msg = '회원가입 중 오류가 발생했습니다.';
-            if (error.code === 'auth/email-already-in-use') msg = '이미 존재하는 아이디 또는 이메일입니다.';
-            alert(msg + "\n(" + error.code + ")");
-        }
-    }
-
-    async logout() {
-        try {
-            await auth.signOut();
-            window.location.reload();
-        } catch (error) {
-            console.error('Logout Error:', error);
-        }
     }
 
     updateUI() {
@@ -543,23 +353,40 @@ class AuthManager {
             userDisplay: document.getElementById('user-display-name'),
             roleBadge: document.getElementById('user-role-badge'),
             adminMenu: document.getElementById('admin-menu'),
-            adminBankMgmt: document.getElementById('admin-bank-mgmt')
+            adminBankMgmt: document.getElementById('admin-bank-mgmt'),
+            sidebarLinks: document.querySelectorAll('.sidebar li:not(#admin-menu) a:not(#home-link)')
         };
 
         if (this.currentUser) {
             if (els.loginBtn) els.loginBtn.classList.add('hidden');
             if (els.signupBtn) els.signupBtn.classList.add('hidden');
             if (els.userInfo) els.userInfo.classList.remove('hidden');
+            
+            const nameToDisplay = this.currentUser.nickname || this.currentUser.username;
             if (els.userDisplay) {
-                els.userDisplay.textContent = this.currentUser.username;
-                if (this.currentUser.classCode || this.currentUser.adminCode) {
-                    els.userDisplay.textContent += ` [${this.currentUser.classCode || this.currentUser.adminCode}]`;
-                }
+                els.userDisplay.textContent = nameToDisplay;
+                const code = this.currentUser.classCode || this.currentUser.adminCode;
+                if (code) els.userDisplay.textContent += ` [${code}]`;
             }
+
             if (els.roleBadge) {
-                els.roleBadge.textContent = this.currentUser.role === 'admin' ? '관리자' : (this.currentUser.role === 'loading' ? '로딩중...' : '학생');
-                els.roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
+                let statusText = this.currentUser.role === 'admin' ? '관리자' : '학생';
+                if (this.currentUser.role === 'student' && !this.currentUser.isAuthorized) {
+                    statusText = '비인증 학생';
+                    els.roleBadge.style.color = '#ff9800';
+                } else {
+                    els.roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
+                }
+                els.roleBadge.textContent = statusText;
             }
+
+            // 권한 제한: 비인증 학생 접근 차단
+            const isRestricted = this.currentUser.role === 'student' && !this.currentUser.isAuthorized;
+            els.sidebarLinks.forEach(link => {
+                link.style.opacity = isRestricted ? '0.3' : '1';
+                link.style.pointerEvents = isRestricted ? 'none' : 'auto';
+            });
+            
             if (this.currentUser.role === 'admin') {
                 if (els.adminMenu) els.adminMenu.classList.remove('hidden');
                 if (els.adminBankMgmt) els.adminBankMgmt.classList.remove('hidden');
@@ -567,7 +394,7 @@ class AuthManager {
                 if (mgmtCode) mgmtCode.textContent = this.currentUser.classCode;
                 this.loadStudentList();
                 this.loadStudentAssets();
-                this.simulation.loadClassLogs();
+                if (this.simulation) this.simulation.loadClassLogs();
             } else {
                 if (els.adminMenu) els.adminMenu.classList.add('hidden');
                 if (els.adminBankMgmt) els.adminBankMgmt.classList.add('hidden');
@@ -578,50 +405,10 @@ class AuthManager {
             if (els.userInfo) els.userInfo.classList.add('hidden');
             if (els.adminMenu) els.adminMenu.classList.add('hidden');
             if (els.adminBankMgmt) els.adminBankMgmt.classList.add('hidden');
-        }
-    }
-
-    async loadStudentAssets() {
-        if (!this.currentUser || this.currentUser.role !== 'admin') return;
-        const tbody = document.getElementById('asset-mgmt-body');
-        if (!tbody) return;
-
-        // 1. 학급 학생 목록 가져오기
-        const studentSnapshot = await db.collection('users')
-            .where('role', '==', 'student')
-            .where('adminCode', '==', this.currentUser.classCode)
-            .get();
-
-        tbody.innerHTML = '';
-        
-        // 2. 각 학생의 자산 데이터(playerData) 가져오기
-        for (const studentDoc of studentSnapshot.docs) {
-            const student = studentDoc.data();
-            const assetDoc = await db.collection('playerData').doc(studentDoc.id).get();
-            const assets = assetDoc.exists ? assetDoc.data() : { cash: 0, bankBalance: 0, portfolio: {} };
-
-            // 주식 평가액 계산 (현재 시뮬레이션 가격 기준)
-            let stockValue = 0;
-            if (assets.portfolio) {
-                for (const sym in assets.portfolio) {
-                    const p = assets.portfolio[sym];
-                    // 관리자 화면에서도 현재 시뮬레이션 가격을 알 수 있도록 simulation 객체 활용
-                    const curPrice = (sym === this.simulation.currentStockSymbol ? this.simulation.currentStockPrice : p.avgPrice);
-                    stockValue += p.amount * curPrice;
-                }
-            }
-
-            const total = (assets.cash || 0) + (assets.bankBalance || 0) + stockValue;
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${student.username}</td>
-                <td>₩${Math.floor(assets.cash || 0).toLocaleString()}</td>
-                <td>₩${Math.floor(assets.bankBalance || 0).toLocaleString()}</td>
-                <td>₩${Math.floor(stockValue).toLocaleString()}</td>
-                <td style="color: #00ffdd; font-weight: bold;">₩${Math.floor(total).toLocaleString()}</td>
-            `;
-            tbody.appendChild(tr);
+            els.sidebarLinks.forEach(link => {
+                link.style.opacity = '0.3';
+                link.style.pointerEvents = 'none';
+            });
         }
     }
 
@@ -629,19 +416,35 @@ class AuthManager {
         if (!this.currentUser || this.currentUser.role !== 'admin') return;
         const tbody = document.getElementById('student-list-body');
         if (!tbody) return;
+
         const snapshot = await db.collection('users')
             .where('role', '==', 'student')
-            .where('classCode', '==', this.currentUser.classCode)
+            .where('adminCode', '==', this.currentUser.classCode)
             .get();
+
         tbody.innerHTML = '';
         snapshot.forEach(doc => {
             const data = doc.data();
             const tr = document.createElement('tr');
+            const isAuth = data.isAuthorized || false;
+            
             tr.innerHTML = `
                 <td>${data.username}</td>
-                <td>${data.createdAt ? data.createdAt.toDate().toLocaleDateString() : '-'}</td>
                 <td>
-                    <button class="auth-btn" style="font-size: 0.8em; padding: 5px 10px;" onclick="window.deleteStudentAccount('${doc.id}', '${data.username}')">계정 삭제</button>
+                    <input type="text" value="${data.nickname || ''}" placeholder="실명 입력" 
+                        onchange="window.updateStudentNickname('${doc.id}', this.value)" 
+                        style="background:#1a1a1a; border:1px solid #444; color:white; padding:5px; width:100px;">
+                </td>
+                <td style="color: ${isAuth ? '#00ffdd' : '#ff4d4d'}">
+                    ${isAuth ? '인증됨' : '비인증'}
+                </td>
+                <td>
+                    <button class="auth-btn" style="font-size: 0.8em; padding: 5px 10px; margin-right:5px; background: ${isAuth ? '#444' : '#00ffdd'}" 
+                        onclick="window.toggleStudentAuth('${doc.id}', ${!isAuth})">
+                        ${isAuth ? '인증 취소' : '인증 승인'}
+                    </button>
+                    <button class="auth-btn" style="font-size: 0.8em; padding: 5px 10px; background: #ff4d4d" 
+                        onclick="window.deleteStudentAccount('${doc.id}', '${data.username}')">삭제</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -1158,6 +961,25 @@ class EconomicSimulation {
 }
 
 
+
+window.updateStudentNickname = async (uid, newNickname) => {
+    try {
+        await db.collection('users').doc(uid).update({ nickname: newNickname });
+        alert('닉네임이 업데이트되었습니다.');
+    } catch (error) {
+        alert('업데이트 실패: ' + error.message);
+    }
+};
+
+window.toggleStudentAuth = async (uid, newStatus) => {
+    try {
+        await db.collection('users').doc(uid).update({ isAuthorized: newStatus });
+        alert(newStatus ? '인증 승인되었습니다.' : '인증 취소되었습니다.');
+        location.reload();
+    } catch (error) {
+        alert('권한 변경 실패: ' + error.message);
+    }
+};
 
 window.deleteStudentAccount = async (uid, username) => {
     if (confirm(`[${username}] 학생의 계정을 삭제하시겠습니까?`)) {
