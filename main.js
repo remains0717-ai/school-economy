@@ -17,35 +17,35 @@ const db = firebase.firestore();
 class AuthManager {
     constructor(simulation) {
         this.simulation = simulation;
-        this.classUnsubscribe = null; // 학급 리스너 전용 해제 함수
+        this.classUnsub = null;
         this.initEvents();
         this.listenToAuth();
     }
 
     initEvents() {
+        // [인증 관련]
         document.getElementById('login-btn')?.addEventListener('click', () => this.openModal('login'));
         document.getElementById('signup-btn')?.addEventListener('click', () => this.openModal('signup'));
         document.querySelector('.close-modal')?.addEventListener('click', () => document.getElementById('auth-modal').style.display='none');
         document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
         document.getElementById('user-display-name')?.addEventListener('click', () => this.openMyInfo());
-        document.getElementById('add-item-btn')?.addEventListener('click', () => this.addShopItem());
-        document.getElementById('signup-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.signup(); });
-        document.getElementById('login-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
         
-        // 은행 관련 버튼 (예/적금 이용 뷰)
+        // [은행/금리 관련]
         document.getElementById('deposit-btn')?.addEventListener('click', () => this.simulation.deposit());
         document.getElementById('withdraw-btn')?.addEventListener('click', () => this.simulation.withdraw());
         document.getElementById('apply-loan-btn')?.addEventListener('click', () => this.simulation.applyLoan());
 
+        // [관리자 설정 관련]
+        document.getElementById('add-item-btn')?.addEventListener('click', () => this.addShopItem());
+        document.getElementById('signup-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.signup(); });
+        document.getElementById('login-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
+        
         document.getElementById('selectAllStudents')?.addEventListener('change', (e) => {
-            const checkboxes = document.querySelectorAll('.student-checkbox');
-            checkboxes.forEach(cb => cb.checked = e.target.checked);
+            document.querySelectorAll('.student-checkbox').forEach(cb => cb.checked = e.target.checked);
             this.updateSelectedCount();
         });
-
         document.getElementById('selectAllJobs')?.addEventListener('change', (e) => {
-            const checkboxes = document.querySelectorAll('.job-checkbox');
-            checkboxes.forEach(cb => cb.checked = e.target.checked);
+            document.querySelectorAll('.job-checkbox').forEach(cb => cb.checked = e.target.checked);
             this.updateSelectedJobCount();
         });
 
@@ -54,100 +54,67 @@ class AuthManager {
 
     listenToAuth() {
         auth.onAuthStateChanged(user => {
-            // 전체 리스너 초기화
+            // 이전 리스너들 청소
             window.userState.unsubscribe.forEach(u => u());
             window.userState.unsubscribe = [];
-            if (this.classUnsubscribe) this.classUnsubscribe();
+            if (this.classUnsub) this.classUnsub();
 
             if (user) {
-                console.log("User logged in:", user.uid);
                 const unsub = db.collection('users').doc(user.uid).onSnapshot(doc => {
                     if (doc.exists) {
                         const userData = doc.data();
                         window.userState.currentUser = { uid: user.uid, ...userData };
                         window.userState.isLoggedIn = true;
-                        
                         this.updateUI();
                         this.simulation.sync(window.userState.currentUser);
                         
+                        // 학급 코드 추출 및 리스너 가동
                         const code = (userData.classCode || userData.adminCode || "").trim().toUpperCase();
-                        if (code) {
-                            // 학급 리스너가 아직 없거나 코드가 바뀐 경우에만 새로 연결
-                            if (!this.currentClassCode || this.currentClassCode !== code) {
-                                this.listenToClass(code);
-                            }
+                        if (code && this.currentCode !== code) {
+                            this.currentCode = code;
+                            this.listenToClass(code);
                         }
                     }
                 });
                 window.userState.unsubscribe.push(unsub);
             } else {
-                console.log("User logged out");
-                window.userState.currentUser = null;
-                window.userState.isLoggedIn = false;
-                window.userState.classData = null;
-                this.currentClassCode = null;
-                this.updateUI();
-                this.simulation.reset();
+                this.resetState();
             }
         });
     }
 
     listenToClass(code) {
-        if (this.classUnsubscribe) this.classUnsubscribe();
-        this.currentClassCode = code;
-        console.log("Listening to class data for:", code);
-
-        this.classUnsubscribe = db.collection('classes').doc(code).onSnapshot(doc => {
+        if (this.classUnsub) this.classUnsub();
+        console.log("Connecting to class pipeline:", code);
+        this.classUnsub = db.collection('classes').doc(code).onSnapshot(doc => {
             if (doc.exists) {
-                const data = doc.data();
-                console.log("Class data received from Firestore:", data);
-                window.userState.classData = data;
+                window.userState.classData = doc.data();
                 this.updateClassUI();
-            } else {
-                console.warn("Class document does not exist:", code);
             }
-        }, err => {
-            console.error("Class snapshot error:", err);
         });
     }
 
     updateUI() {
-        const user = window.userState.currentUser;
+        const u = window.userState.currentUser;
         const loggedIn = window.userState.isLoggedIn;
-        const els = {
-            info: document.getElementById('user-info'),
-            login: document.getElementById('login-btn'),
-            signup: document.getElementById('signup-btn'),
-            lHome: document.getElementById('logged-in-home'),
-            oHome: document.getElementById('logged-out-home'),
-            adminMenu: document.getElementById('admin-menu'),
-            shopAdmin: document.getElementById('admin-shop-controls'),
-            treasuryAdmin: document.getElementById('admin-treasury-controls')
-        };
-
-        if (els.info) els.info.classList.toggle('hidden', !loggedIn);
-        if (els.login) els.login.classList.toggle('hidden', loggedIn);
-        if (els.signup) els.signup.classList.toggle('hidden', loggedIn);
-        if (els.lHome) els.lHome.classList.toggle('hidden', !loggedIn);
-        if (els.oHome) els.oHome.classList.toggle('hidden', loggedIn);
+        
+        document.getElementById('user-info')?.classList.toggle('hidden', !loggedIn);
+        document.getElementById('login-btn')?.classList.toggle('hidden', loggedIn);
+        document.getElementById('signup-btn')?.classList.toggle('hidden', loggedIn);
+        document.getElementById('logged-in-home')?.classList.toggle('hidden', !loggedIn);
+        document.getElementById('logged-out-home')?.classList.toggle('hidden', loggedIn);
 
         if (loggedIn) {
-            const dn = document.getElementById('user-display-name');
-            if (dn) dn.textContent = user.nickname || user.username;
-            const isAdmin = user.role === 'admin';
-            if (els.adminMenu) els.adminMenu.classList.toggle('hidden', !isAdmin);
-            if (els.shopAdmin) els.shopAdmin.classList.toggle('hidden', !isAdmin);
-            if (els.treasuryAdmin) els.treasuryAdmin.classList.toggle('hidden', !isAdmin);
+            document.getElementById('user-display-name').textContent = u.nickname || u.username;
+            const isAdmin = u.role === 'admin';
+            document.getElementById('admin-menu')?.classList.toggle('hidden', !isAdmin);
+            document.getElementById('admin-shop-controls')?.classList.toggle('hidden', !isAdmin);
+            document.getElementById('admin-treasury-controls')?.classList.toggle('hidden', !isAdmin);
             
             if (isAdmin) {
-                const mc = document.getElementById('mgmt-class-code');
-                if (mc) mc.textContent = user.classCode || user.adminCode;
+                document.getElementById('mgmt-class-code').textContent = u.classCode || u.adminCode;
                 this.loadAdminLists();
             }
-        } else {
-            if (els.adminMenu) els.adminMenu.classList.add('hidden');
-            if (els.shopAdmin) els.shopAdmin.classList.add('hidden');
-            if (els.treasuryAdmin) els.treasuryAdmin.classList.add('hidden');
         }
     }
 
@@ -155,49 +122,55 @@ class AuthManager {
         const data = window.userState.classData;
         if (!data) return;
 
-        console.log("Updating UI with class data...");
-        const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-        const setVal = (id, val) => { 
+        const setT = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        const setV = (id, val) => { 
             const el = document.getElementById(id); 
             if (el && document.activeElement !== el) el.value = val; 
         };
-        
-        const baseRate = data.baseRate !== undefined ? data.baseRate : 0;
-        const maturityHours = data.maturityHours || 24;
-        const loanSpread = data.loanSpread !== undefined ? data.loanSpread : 2.0;
-        const bondSpread = data.bondSpread !== undefined ? data.bondSpread : 1.0;
 
-        // 전역 지표 업데이트
-        setEl('class-treasury', `₩${(data.treasury || 0).toLocaleString()}`);
-        setEl('treasury-amount', (data.treasury || 0).toLocaleString());
-        setEl('debt-amount', (data.debt || 0).toLocaleString());
-        setEl('display-base-rate', baseRate);
-        
-        // 관리자 정책 뷰 레이블 업데이트
-        setEl('current-deposit-rate', baseRate);
-        setEl('current-loan-rate', (baseRate + loanSpread).toFixed(1));
-        setEl('current-bond-rate', (baseRate + bondSpread).toFixed(1));
-        setEl('display-loan-spread', loanSpread);
-        setEl('display-bond-spread', bondSpread);
-        setEl('current-maturity-display', maturityHours);
+        const br = data.baseRate || 0;
+        const mh = data.maturityHours || 24;
+        const ls = data.loanSpread || 2.0;
+        const bs = data.bondSpread || 1.0;
 
-        // 관리자 정책 입력창 업데이트 (수정 중이 아닐 때만)
-        setVal('policy-base-rate', baseRate);
-        setVal('policy-maturity-hours', maturityHours);
-        setVal('policy-loan-spread', loanSpread);
-        setVal('policy-bond-spread', bondSpread);
+        // [공통 정보]
+        setT('class-treasury', `₩${(data.treasury || 0).toLocaleString()}`);
+        setT('treasury-amount', (data.treasury || 0).toLocaleString());
+        setT('debt-amount', (data.debt || 0).toLocaleString());
+        setT('display-base-rate', br);
 
-        // 학생 뷰 업데이트
-        setEl('student-deposit-rate', `${baseRate}%`);
-        setEl('student-maturity-hours', `${maturityHours}시간`);
-        setEl('display-loan-rate', `${(baseRate + loanSpread).toFixed(1)}%`);
+        // [관리자 뷰 - 정책]
+        setT('current-deposit-rate', br);
+        setT('current-loan-rate', (br + ls).toFixed(1));
+        setT('current-bond-rate', (br + bs).toFixed(1));
+        setT('display-loan-spread', ls);
+        setT('display-bond-spread', bs);
+        setT('current-maturity-display', mh);
+
+        // [관리자 뷰 - 입력 필드] (서버 데이터로 강제 동기화)
+        setV('policy-base-rate', br);
+        setV('policy-maturity-hours', mh);
+        setV('policy-loan-spread', ls);
+        setV('policy-bond-spread', bs);
+
+        // [학생 뷰]
+        setT('student-deposit-rate', `${br}%`);
+        setT('student-maturity-hours', `${mh}시간`);
+        setT('display-loan-rate', `${(br + ls).toFixed(1)}%`);
 
         if (data.news) {
-            const tc = document.getElementById('news-ticker-container');
-            const tt = document.getElementById('news-ticker');
-            if (tc) tc.classList.remove('hidden');
-            if (tt) tt.textContent = `📢 ${data.news}`;
+            document.getElementById('news-ticker-container')?.classList.remove('hidden');
+            setT('news-ticker', `📢 ${data.news}`);
         }
+    }
+
+    resetState() {
+        window.userState.isLoggedIn = false;
+        window.userState.currentUser = null;
+        window.userState.classData = null;
+        this.currentCode = null;
+        this.updateUI();
+        this.simulation.reset();
     }
 
     async loadAdminLists() {
@@ -499,42 +472,28 @@ window.adjustTreasury = async (mode) => {
 
 // [신설] 중앙은행 통화 정책 업데이트
 window.updateBankPolicy = async () => {
-    console.log("updateBankPolicy function called.");
-    const baseRate = parseFloat(document.getElementById('policy-base-rate').value);
-    const maturityHours = parseInt(document.getElementById('policy-maturity-hours').value);
-    const loanSpread = parseFloat(document.getElementById('policy-loan-spread').value);
-    const bondSpread = parseFloat(document.getElementById('policy-bond-spread').value);
+    const br = parseFloat(document.getElementById('policy-base-rate').value);
+    const mh = parseInt(document.getElementById('policy-maturity-hours').value);
+    const ls = parseFloat(document.getElementById('policy-loan-spread').value);
+    const bs = parseFloat(document.getElementById('policy-bond-spread').value);
 
-    if (isNaN(baseRate) || isNaN(maturityHours) || isNaN(loanSpread) || isNaN(bondSpread)) {
-        console.error("Invalid inputs:", {baseRate, maturityHours, loanSpread, bondSpread});
-        return alert("모든 항목에 숫자를 입력해 주세요.");
-    }
+    if ([br, mh, ls, bs].some(isNaN)) return alert("모든 항목에 숫자를 입력해 주세요.");
 
-    const user = window.userState.currentUser;
-    const rawCode = user.classCode || user.adminCode;
-    const classCode = (rawCode || "").trim().toUpperCase();
+    const u = window.userState.currentUser;
+    const code = (u.classCode || u.adminCode || "").trim().toUpperCase();
 
-    if (!classCode) {
-        console.error("No classCode found in userState:", user);
-        return alert("학급 코드를 찾을 수 없습니다. 다시 로그인해 주세요.");
-    }
-
-    console.log(`Saving policy to classes/${classCode}:`, {baseRate, maturityHours, loanSpread, bondSpread});
+    if (!code) return alert("학급 코드를 찾을 수 없습니다.");
 
     try {
-        // update 대신 set(merge:true)를 사용하여 안전하게 저장
-        await db.collection('classes').doc(classCode).set({
-            baseRate,
-            maturityHours,
-            loanSpread,
-            bondSpread
+        await db.collection('classes').doc(code).set({
+            baseRate: br,
+            maturityHours: mh,
+            loanSpread: ls,
+            bondSpread: bs
         }, { merge: true });
-        
-        console.log("Firestore write successful.");
         alert("통화 정책이 성공적으로 반영되었습니다!");
     } catch (err) {
-        console.error("Firestore write failed:", err);
-        alert("정책 반영 중 오류가 발생했습니다: " + err.message);
+        alert("반영 실패: " + err.message);
     }
 };
 
