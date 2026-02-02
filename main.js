@@ -334,6 +334,12 @@ class AuthManager {
             this.loginContainer.classList.add('hidden');
             this.signupContainer.classList.remove('hidden');
             this.toggleText.innerHTML = `이미 계정이 있으신가요? <a href="#" id="toggle-to-login">로그인</a>`;
+            
+            // 기본값인 '학생'에 맞춰 학급 코드 칸 보이기
+            document.getElementById('signup-class-code-container').classList.remove('hidden');
+            document.getElementById('signup-username-container').classList.remove('hidden');
+            document.getElementById('signup-email').classList.add('hidden');
+            document.getElementById('signup-role').value = 'student';
         }
         
         const newToggle = mode === 'login' ? document.getElementById('toggle-to-signup') : document.getElementById('toggle-to-login');
