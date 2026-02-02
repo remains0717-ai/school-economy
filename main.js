@@ -17,6 +17,7 @@ const db = firebase.firestore();
 class AuthManager {
     constructor(simulation) {
         this.simulation = simulation;
+        this.classUnsubscribe = null; // 학급 리스너 전용 해제 함수
         this.initEvents();
         this.listenToAuth();
     }
@@ -53,35 +54,61 @@ class AuthManager {
 
     listenToAuth() {
         auth.onAuthStateChanged(user => {
+            // 전체 리스너 초기화
             window.userState.unsubscribe.forEach(u => u());
             window.userState.unsubscribe = [];
+            if (this.classUnsubscribe) this.classUnsubscribe();
+
             if (user) {
+                console.log("User logged in:", user.uid);
                 const unsub = db.collection('users').doc(user.uid).onSnapshot(doc => {
                     if (doc.exists) {
-                        window.userState.currentUser = { uid: user.uid, ...doc.data() };
+                        const userData = doc.data();
+                        window.userState.currentUser = { uid: user.uid, ...userData };
                         window.userState.isLoggedIn = true;
+                        
                         this.updateUI();
                         this.simulation.sync(window.userState.currentUser);
-                        const code = window.userState.currentUser.classCode || window.userState.currentUser.adminCode;
-                        if (code) this.listenToClass(code);
+                        
+                        const code = (userData.classCode || userData.adminCode || "").trim().toUpperCase();
+                        if (code) {
+                            // 학급 리스너가 아직 없거나 코드가 바뀐 경우에만 새로 연결
+                            if (!this.currentClassCode || this.currentClassCode !== code) {
+                                this.listenToClass(code);
+                            }
+                        }
                     }
                 });
                 window.userState.unsubscribe.push(unsub);
             } else {
-                window.userState.currentUser = null; window.userState.isLoggedIn = false;
-                this.updateUI(); this.simulation.reset();
+                console.log("User logged out");
+                window.userState.currentUser = null;
+                window.userState.isLoggedIn = false;
+                window.userState.classData = null;
+                this.currentClassCode = null;
+                this.updateUI();
+                this.simulation.reset();
             }
         });
     }
 
     listenToClass(code) {
-        const unsub = db.collection('classes').doc(code).onSnapshot(doc => {
+        if (this.classUnsubscribe) this.classUnsubscribe();
+        this.currentClassCode = code;
+        console.log("Listening to class data for:", code);
+
+        this.classUnsubscribe = db.collection('classes').doc(code).onSnapshot(doc => {
             if (doc.exists) {
-                window.userState.classData = doc.data();
+                const data = doc.data();
+                console.log("Class data received from Firestore:", data);
+                window.userState.classData = data;
                 this.updateClassUI();
+            } else {
+                console.warn("Class document does not exist:", code);
             }
+        }, err => {
+            console.error("Class snapshot error:", err);
         });
-        window.userState.unsubscribe.push(unsub);
     }
 
     updateUI() {
@@ -114,7 +141,7 @@ class AuthManager {
             
             if (isAdmin) {
                 const mc = document.getElementById('mgmt-class-code');
-                if (mc) mc.textContent = user.classCode;
+                if (mc) mc.textContent = user.classCode || user.adminCode;
                 this.loadAdminLists();
             }
         } else {
@@ -127,16 +154,18 @@ class AuthManager {
     updateClassUI() {
         const data = window.userState.classData;
         if (!data) return;
+
+        console.log("Updating UI with class data...");
         const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
         const setVal = (id, val) => { 
             const el = document.getElementById(id); 
             if (el && document.activeElement !== el) el.value = val; 
         };
         
-        const baseRate = data.baseRate || 0;
+        const baseRate = data.baseRate !== undefined ? data.baseRate : 0;
         const maturityHours = data.maturityHours || 24;
-        const loanSpread = data.loanSpread || 2.0;
-        const bondSpread = data.bondSpread || 1.0;
+        const loanSpread = data.loanSpread !== undefined ? data.loanSpread : 2.0;
+        const bondSpread = data.bondSpread !== undefined ? data.bondSpread : 1.0;
 
         // 전역 지표 업데이트
         setEl('class-treasury', `₩${(data.treasury || 0).toLocaleString()}`);
@@ -152,7 +181,7 @@ class AuthManager {
         setEl('display-bond-spread', bondSpread);
         setEl('current-maturity-display', maturityHours);
 
-        // 관리자 정책 입력창 업데이트 (포커스가 없을 때만)
+        // 관리자 정책 입력창 업데이트 (수정 중이 아닐 때만)
         setVal('policy-base-rate', baseRate);
         setVal('policy-maturity-hours', maturityHours);
         setVal('policy-loan-spread', loanSpread);
@@ -470,37 +499,41 @@ window.adjustTreasury = async (mode) => {
 
 // [신설] 중앙은행 통화 정책 업데이트
 window.updateBankPolicy = async () => {
-    console.log("Attempting to update bank policy...");
+    console.log("updateBankPolicy function called.");
     const baseRate = parseFloat(document.getElementById('policy-base-rate').value);
     const maturityHours = parseInt(document.getElementById('policy-maturity-hours').value);
     const loanSpread = parseFloat(document.getElementById('policy-loan-spread').value);
     const bondSpread = parseFloat(document.getElementById('policy-bond-spread').value);
 
     if (isNaN(baseRate) || isNaN(maturityHours) || isNaN(loanSpread) || isNaN(bondSpread)) {
-        console.error("Invalid input values detected:", {baseRate, maturityHours, loanSpread, bondSpread});
+        console.error("Invalid inputs:", {baseRate, maturityHours, loanSpread, bondSpread});
         return alert("모든 항목에 숫자를 입력해 주세요.");
     }
 
     const user = window.userState.currentUser;
-    const classCode = user.classCode || user.adminCode; // 관리자의 경우 보통 classCode에 저장됨
+    const rawCode = user.classCode || user.adminCode;
+    const classCode = (rawCode || "").trim().toUpperCase();
 
     if (!classCode) {
-        console.error("Class code not found for user:", user);
+        console.error("No classCode found in userState:", user);
         return alert("학급 코드를 찾을 수 없습니다. 다시 로그인해 주세요.");
     }
 
-    console.log(`Updating class ${classCode} with rates:`, {baseRate, loanSpread, bondSpread});
+    console.log(`Saving policy to classes/${classCode}:`, {baseRate, maturityHours, loanSpread, bondSpread});
 
     try {
-        await db.collection('classes').doc(classCode).update({
+        // update 대신 set(merge:true)를 사용하여 안전하게 저장
+        await db.collection('classes').doc(classCode).set({
             baseRate,
             maturityHours,
             loanSpread,
             bondSpread
-        });
+        }, { merge: true });
+        
+        console.log("Firestore write successful.");
         alert("통화 정책이 성공적으로 반영되었습니다!");
     } catch (err) {
-        console.error("Firestore update failed:", err);
+        console.error("Firestore write failed:", err);
         alert("정책 반영 중 오류가 발생했습니다: " + err.message);
     }
 };
