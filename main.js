@@ -167,14 +167,15 @@ class LogPanel extends HTMLElement {
 
 customElements.define('log-panel', LogPanel);
 
-// Firebase Configuration (Replace with your actual config from Firebase Console)
+// Firebase Configuration
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "your-id",
-    appId: "your-app-id"
+    apiKey: "AIzaSyBoVbtaw2BR29qyuFKPxBKVeEtkSLF49yg",
+    authDomain: "school-economydata.firebaseapp.com",
+    projectId: "school-economydata",
+    storageBucket: "school-economydata.firebasestorage.app",
+    messagingSenderId: "662631755029",
+    appId: "1:662631755029:web:7c63e30355d9dd6136cd1c",
+    measurementId: "G-65086JEHVJ"
 };
 
 // Initialize Firebase
