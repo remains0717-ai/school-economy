@@ -1019,7 +1019,7 @@ function loadTreasuryLogs(code) {
 }
 
 window.adjustDebt = async (mode) => {
-    const input = document.getElementById('adj-debt-amount');
+    const input = document.getElementById('adj-treasury-amount');
     const amount = parseInt(input.value);
     if (isNaN(amount)) return alert("올바른 금액을 입력하세요.");
 
