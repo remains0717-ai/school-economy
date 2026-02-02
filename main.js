@@ -414,20 +414,21 @@ class AuthManager {
 
         const username = usernameInput.value.trim();
         const pass = passwordInput.value;
-        const email = (username.includes('@')) ? username : `${username.toLowerCase()}@school-economy.local`;
+        
+        // [수정] 학생 가입 도메인 @student.com으로 통일
+        const email = (username.includes('@')) ? username : `${username.toLowerCase()}@student.com`;
 
         try {
             await auth.signInWithEmailAndPassword(email, pass);
             this.closeModal();
             window.location.reload();
         } catch (error) {
+            console.error("Login Error:", error.code);
             alert('아이디 또는 비밀번호가 틀렸습니다.');
         }
     }
 
     async signup() {
-        console.log("--- 회원가입 프로세스 시작 ---");
-        
         try {
             const roleSelect = document.getElementById('signup-role');
             const passInput = document.getElementById('signup-password');
@@ -441,7 +442,6 @@ class AuthManager {
             let username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
             const inputCode = classCodeInput ? classCodeInput.value.trim().toUpperCase() : '';
 
-            // 1. 기본 유효성 검사
             if (pass.length < 6) {
                 alert('비밀번호는 최소 6자 이상이어야 합니다.');
                 return;
@@ -457,18 +457,15 @@ class AuthManager {
                 return;
             }
 
-            // 2. 학급 코드 검증 (학생 전용)
+            // 학급 코드 검증
             if (role === 'student') {
-                console.log("학급 코드 검증 중:", inputCode);
                 const classDoc = await db.collection('classes').doc(inputCode).get();
                 if (!classDoc.exists) {
                     alert('유효하지 않은 학급 코드입니다. 선생님께 확인해 주세요.');
                     return;
                 }
-                console.log("학급 코드 확인 완료");
             }
 
-            // 3. 이메일 형식 결정
             if (role === 'admin') {
                 if (!adminEmail || !adminEmail.includes('@')) {
                     alert('올바른 관리자 이메일을 입력해 주세요.');
@@ -476,20 +473,17 @@ class AuthManager {
                 }
                 username = adminEmail.split('@')[0];
             }
+            
             const finalEmail = role === 'admin' ? adminEmail : `${username}@student.com`;
-            console.log("가입 시도 이메일:", finalEmail);
 
-            // 4. Firebase Auth 가입 시도
-            console.log("Firebase Auth 통신 시작...");
+            // Firebase Auth 가입
             const userCredential = await auth.createUserWithEmailAndPassword(finalEmail, pass);
             const user = userCredential.user;
-            console.log("Auth 가입 성공. UID:", user.uid);
 
-            // 5. Firestore 데이터 작성
+            // Firestore 데이터 작성
             let generatedClassCode = null;
             if (role === 'admin') {
                 generatedClassCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-                console.log("관리자 학급 생성 중:", generatedClassCode);
                 await db.collection('classes').doc(generatedClassCode).set({
                     adminUid: user.uid,
                     adminEmail: finalEmail,
@@ -498,7 +492,6 @@ class AuthManager {
                 });
             }
 
-            console.log("사용자 프로필 저장 중...");
             await db.collection('users').doc(user.uid).set({
                 username: username,
                 role: role,
@@ -508,7 +501,6 @@ class AuthManager {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            console.log("초기 자산 데이터 생성 중...");
             await db.collection('playerData').doc(user.uid).set({
                 cash: 1000,
                 bankBalance: 0,
@@ -516,23 +508,20 @@ class AuthManager {
                 portfolio: {}
             });
 
-            // 6. 마무리
             if (role === 'student') {
-                alert('학생 회원가입이 완료되었습니다! 이제 로그인을 해주세요.');
+                alert('회원가입이 완료되었습니다! 이제 로그인을 해주세요.');
             } else {
-                alert(`관리자 가입 완료!\n학급 코드는 [${generatedClassCode}] 입니다.\n학생들에게 이 코드를 알려주세요.`);
+                alert(`관리자 가입 완료!\n학급 코드는 [${generatedClassCode}] 입니다.\n(내 정보에서 상시 확인 가능)`);
             }
 
-            // 가입 후 즉시 로그아웃 처리 (세션 꼬임 방지)
             await auth.signOut();
             this.closeModal();
             window.location.reload();
 
         } catch (error) {
-            console.error("회원가입 최종 에러:", error);
+            console.error("Signup Error:", error);
             let msg = '회원가입 중 오류가 발생했습니다.';
             if (error.code === 'auth/email-already-in-use') msg = '이미 존재하는 아이디 또는 이메일입니다.';
-            if (error.code === 'permission-denied') msg = '데이터베이스 권한이 없습니다. 보안 규칙을 확인해 주세요.';
             alert(msg + "\n(" + error.code + ")");
         }
     }
