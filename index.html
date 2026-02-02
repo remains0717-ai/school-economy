@@ -37,12 +37,17 @@
             <div id="signup-form-container" class="hidden">
                 <h2>회원가입</h2>
                 <form id="signup-form">
-                    <input type="text" id="signup-username" placeholder="아이디" required>
-                    <input type="password" id="signup-password" placeholder="비밀번호" required>
                     <select id="signup-role">
                         <option value="student">학생</option>
                         <option value="admin">관리자</option>
                     </select>
+                    <input type="text" id="signup-username" placeholder="아이디" required>
+                    <input type="email" id="signup-email" class="hidden" placeholder="이메일 (관리자 보안용)">
+                    <input type="password" id="signup-password" placeholder="비밀번호 (6자 이상)" required>
+                    <div id="class-code-display" class="hidden" style="margin: 10px 0; padding: 10px; background: #1a1a1a; border: 1px dashed #00ffdd; color: #00ffdd; text-align: center;">
+                        학급 코드: <strong id="generated-code"></strong>
+                        <p style="font-size: 0.8em; color: #888;">이 코드를 학생들에게 공유하세요.</p>
+                    </div>
                     <button type="submit">가입하기</button>
                 </form>
             </div>

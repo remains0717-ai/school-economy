@@ -206,6 +206,17 @@ class AuthManager {
         document.querySelector('.close-modal').addEventListener('click', () => this.closeModal());
         document.getElementById('logout-btn').addEventListener('click', () => this.logout());
 
+        document.getElementById('signup-role').addEventListener('change', (e) => {
+            const emailInput = document.getElementById('signup-email');
+            if (e.target.value === 'admin') {
+                emailInput.classList.remove('hidden');
+                emailInput.required = true;
+            } else {
+                emailInput.classList.add('hidden');
+                emailInput.required = false;
+            }
+        });
+
         this.toggleLink.addEventListener('click', (e) => {
             e.preventDefault();
             const isLogin = this.signupContainer.classList.contains('hidden');
@@ -235,7 +246,8 @@ class AuthManager {
                 this.currentUser = { 
                     uid: user.uid, 
                     username: userData?.username || user.email.split('@')[0], 
-                    role: userData?.role || 'student' 
+                    role: userData?.role || 'student',
+                    classCode: userData?.classCode || null
                 };
                 this.simulation.loadUserData(user.uid);
             } else {
@@ -253,6 +265,11 @@ class AuthManager {
 
     closeModal() {
         this.modal.style.display = 'none';
+        // Reset forms
+        document.getElementById('login-form').reset();
+        document.getElementById('signup-form').reset();
+        document.getElementById('signup-email').classList.add('hidden');
+        document.getElementById('class-code-display').classList.add('hidden');
     }
 
     switchMode(mode) {
@@ -274,35 +291,60 @@ class AuthManager {
     }
 
     async login() {
-        const username = document.getElementById('login-username').value;
+        const username = document.getElementById('login-username').value.trim().toLowerCase();
         const pass = document.getElementById('login-password').value;
-        const email = `${username}@school-economy.local`;
+        
+        // Find if it's an admin (real email) or student (virtual email)
+        // Since we don't know the role before login, we attempt both or rely on the virtual format for students
+        // To handle both, we first check if the input is an email format
+        const isEmail = username.includes('@');
+        const email = isEmail ? username : `${username}@school-economy.local`;
 
         try {
             await auth.signInWithEmailAndPassword(email, pass);
             this.closeModal();
+            alert('로그인되었습니다.');
         } catch (error) {
-            alert('로그인 실패: ' + error.message);
+            let msg = '로그인 실패: 아이디 또는 비밀번호를 확인해주세요.';
+            if (error.code === 'auth/user-not-found') msg = '존재하지 않는 계정입니다.';
+            if (error.code === 'auth/wrong-password') msg = '비밀번호가 틀렸습니다.';
+            alert(msg);
         }
     }
 
     async signup() {
-        const username = document.getElementById('signup-username').value;
-        const pass = document.getElementById('signup-password').value;
         const role = document.getElementById('signup-role').value;
-        const email = `${username}@school-economy.local`;
+        const username = document.getElementById('signup-username').value.trim().toLowerCase();
+        const pass = document.getElementById('signup-password').value;
+        const adminEmail = document.getElementById('signup-email').value.trim();
+
+        if (pass.length < 6) {
+            alert('비밀번호는 최소 6자 이상이어야 합니다.');
+            return;
+        }
+
+        const email = role === 'admin' ? adminEmail : `${username}@school-economy.local`;
 
         try {
             const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
             const user = userCredential.user;
             
+            let classCode = null;
+            if (role === 'admin') {
+                classCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+                document.getElementById('generated-code').textContent = classCode;
+                document.getElementById('class-code-display').classList.remove('hidden');
+                alert(`회원가입 완료! 관리자 학급 코드는 [${classCode}] 입니다. 학생들에게 공유해주세요.`);
+            }
+
             await db.collection('users').doc(user.uid).set({
                 username: username,
                 role: role,
+                email: email,
+                classCode: classCode,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            // Initialize player data
             await db.collection('playerData').doc(user.uid).set({
                 cash: 1000,
                 bankBalance: 0,
@@ -310,10 +352,20 @@ class AuthManager {
                 portfolio: {}
             });
 
-            alert('회원가입이 완료되었습니다!');
-            this.closeModal();
+            if (role === 'student') {
+                alert('회원가입이 완료되었습니다! 로그인해 주세요.');
+                this.closeModal();
+            } else {
+                // For admin, we stay a bit to show the code, then they can close or we close after 3s
+                setTimeout(() => {
+                    this.closeModal();
+                }, 5000);
+            }
         } catch (error) {
-            alert('회원가입 실패: ' + error.message);
+            let msg = '회원가입 실패: ' + error.message;
+            if (error.code === 'auth/email-already-in-use') msg = '이미 사용 중인 아이디 또는 이메일입니다.';
+            if (error.code === 'auth/invalid-email') msg = '유효하지 않은 이메일 형식입니다.';
+            alert(msg);
         }
     }
 
@@ -344,6 +396,9 @@ class AuthManager {
             
             if (this.currentUser.role === 'admin') {
                 simulationLink.classList.remove('hidden');
+                if (this.currentUser.classCode) {
+                    userDisplay.textContent += ` [코드: ${this.currentUser.classCode}]`;
+                }
             } else {
                 simulationLink.classList.add('hidden');
             }
