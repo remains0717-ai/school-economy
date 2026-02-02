@@ -492,7 +492,39 @@
                 <div class="log-box" style="height:300px;"><ul id="treasury-logs"></ul></div>
             </div>
 
-            <div id="db-mgmt-view" class="view"><h2>전체 활동 데이터베이스</h2><div class="log-box" style="height:500px;"><ul id="class-logs"></ul></div></div>
+            <div id="db-mgmt-view" class="view">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h2>📜 전체 활동 데이터베이스</h2>
+                    <button onclick="window.deleteSelectedLogs()" class="auth-btn" style="background:var(--danger); width:auto; padding:8px 15px;">선택 항목 삭제</button>
+                </div>
+
+                <!-- 검색 필터 -->
+                <div class="asset-status" style="margin-top:0; padding:15px; display:flex; gap:15px; align-items:center;">
+                    <div style="flex:1; display:flex; gap:10px;">
+                        <input type="text" id="log-search-nickname" placeholder="닉네임으로 검색" style="width:200px;">
+                        <input type="date" id="log-search-date" style="width:180px;">
+                    </div>
+                    <button onclick="window.filterLogs()" class="auth-btn" style="width:80px; margin:0;">필터</button>
+                    <button onclick="window.resetLogFilter()" class="auth-btn" style="width:80px; margin:0; background:#444;">초기화</button>
+                </div>
+
+                <div class="log-box" style="height:600px; margin-top:15px; padding:0; background:transparent; border:none;">
+                    <table style="font-size:0.85rem;">
+                        <thead style="position:sticky; top:0; z-index:10; background:#1a1a1a;">
+                            <tr>
+                                <th style="width:40px;"><input type="checkbox" id="selectAllLogs" onchange="window.toggleAllLogs(this)"></th>
+                                <th style="width:160px;">일시</th>
+                                <th style="width:100px;">사용자</th>
+                                <th style="width:120px;">활동분류</th>
+                                <th>내용</th>
+                            </tr>
+                        </thead>
+                        <tbody id="class-logs-body">
+                            <!-- 로그 데이터가 여기에 동적으로 추가됨 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             <div id="stats-mgmt-view" class="view"><h2>통계 관리</h2><p>준비 중입니다.</p></div>
             <div id="import-export-view" class="view"><h2>가져오기/내보내기</h2><p>준비 중입니다.</p></div>
         </main>

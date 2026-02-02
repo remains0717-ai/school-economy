@@ -14,6 +14,99 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// [Log Activity Helper]
+async function logActivity(type, description) {
+    const u = window.userState.currentUser;
+    const code = (u.classCode || u.adminCode).trim().toUpperCase();
+    if (!code) return;
+
+    try {
+        await db.collection('classes').doc(code).collection('activityLogs').add({
+            timestamp: firebase.firestore.Timestamp.now(),
+            uid: u.uid,
+            username: u.username,
+            nickname: u.nickname || u.username,
+            type: type, // 'banking', 'stock', 'shop', 'admin' 등
+            description: description
+        });
+    } catch (err) { console.error("Logging failed:", err); }
+}
+
+function loadClassLogs(code) {
+    const unsub = db.collection('classes').doc(code).collection('activityLogs').orderBy('timestamp', 'desc').limit(200).onSnapshot(snap => {
+        window.rawLogs = []; // 검색을 위해 원본 데이터 저장
+        snap.forEach(doc => window.rawLogs.push({ id: doc.id, ...doc.data() }));
+        renderLogs(window.rawLogs);
+    });
+    window.userState.unsubscribe.push(unsub);
+}
+
+function renderLogs(logs) {
+    const body = document.getElementById('class-logs-body');
+    if (!body) return;
+    body.innerHTML = '';
+
+    logs.forEach(l => {
+        const date = l.timestamp?.toDate().toLocaleString() || '-';
+        let typeColor = '#888';
+        if (l.type === 'banking') typeColor = 'var(--secondary)';
+        else if (l.type === 'stock') typeColor = 'var(--primary)';
+        else if (l.type === 'shop') typeColor = '#e91e63';
+        else if (l.type === 'admin') typeColor = 'var(--danger)';
+
+        body.innerHTML += `<tr>
+            <td><input type="checkbox" class="log-checkbox" value="${l.id}"></td>
+            <td>${date}</td>
+            <td><strong>${l.nickname}</strong></td>
+            <td><span style="color:${typeColor}">${l.type.toUpperCase()}</span></td>
+            <td>${l.description}</td>
+        </tr>`;
+    });
+}
+
+window.filterLogs = () => {
+    const nickQuery = document.getElementById('log-search-nickname').value.trim().toLowerCase();
+    const dateQuery = document.getElementById('log-search-date').value;
+    
+    let filtered = window.rawLogs || [];
+    if (nickQuery) {
+        filtered = filtered.filter(l => l.nickname.toLowerCase().includes(nickQuery) || l.username.toLowerCase().includes(nickQuery));
+    }
+    if (dateQuery) {
+        filtered = filtered.filter(l => l.timestamp?.toDate().toISOString().split('T')[0] === dateQuery);
+    }
+    renderLogs(filtered);
+};
+
+window.resetLogFilter = () => {
+    document.getElementById('log-search-nickname').value = '';
+    document.getElementById('log-search-date').value = '';
+    renderLogs(window.rawLogs || []);
+};
+
+window.toggleAllLogs = (el) => {
+    document.querySelectorAll('.log-checkbox').forEach(cb => cb.checked = el.checked);
+};
+
+window.deleteSelectedLogs = async () => {
+    const selected = document.querySelectorAll('.log-checkbox:checked');
+    if (selected.length === 0) return alert("삭제할 로그를 선택하세요.");
+    if (!confirm(`${selected.length}개의 로그를 영구 삭제하시겠습니까?`)) return;
+
+    const u = window.userState.currentUser;
+    const code = (u.classCode || u.adminCode).trim().toUpperCase();
+    const batch = db.batch();
+
+    selected.forEach(cb => {
+        batch.delete(db.collection('classes').doc(code).collection('activityLogs').doc(cb.value));
+    });
+
+    try {
+        await batch.commit();
+        alert("삭제되었습니다.");
+    } catch (err) { alert("삭제 실패: " + err.message); }
+};
+
 class AuthManager {
     constructor(simulation) {
         this.simulation = simulation;
@@ -108,6 +201,7 @@ class AuthManager {
                     this.loadAdminLists();
                     loadTreasuryLogs(code);
                     loadAdminShopItems(code);
+                    loadClassLogs(code); // 로그 불러오기 추가
                 }
             }
         });
@@ -685,6 +779,7 @@ class EconomicSimulation {
                 }
             });
             alert(`${this.tradeMode === 'buy' ? '매수' : '매도'} 완료!`);
+            logActivity('stock', `${symbol.split(':')[1]} ${amount}주 ${this.tradeMode === 'buy' ? '매수' : '매도'} (총 ₩${totalCost.toLocaleString()})`);
             this.selectStock(symbol, this.currentStock.name); // UI 갱신
         } catch (err) { alert(err.message); }
     }
@@ -715,6 +810,7 @@ class EconomicSimulation {
                 });
             });
             alert("구매가 완료되었습니다! 가방에서 확인하세요.");
+            logActivity('shop', `[${itemName}] 구매 (₩${price.toLocaleString()})`);
         } catch (err) { alert("구매 실패: " + err.message); }
     }
 
@@ -747,6 +843,7 @@ class EconomicSimulation {
             await batch.commit();
             amtInput.value = '';
             alert("입금 완료!");
+            logActivity('banking', `₩${amt.toLocaleString()} 저축 (이율 ${data.baseRate||0}%)`);
         } catch (err) { alert(err.message); }
     }
 
