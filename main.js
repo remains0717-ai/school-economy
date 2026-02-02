@@ -505,17 +505,42 @@ class AuthManager {
 }
 
 function setupNavigation() {
-    const navLinks = document.querySelectorAll('.sidebar a');
-    navLinks.forEach(link => {
+    const parentLinks = document.querySelectorAll('.parent-link');
+    const subLinks = document.querySelectorAll('.sub-menu a, #home-link');
+    const views = document.querySelectorAll('.view');
+
+    // 1. 아코디언 토글 로직
+    parentLinks.forEach(link => {
         link.addEventListener('click', (e) => {
-            if (link.id === 'securities-link') return;
             e.preventDefault();
-            document.querySelector('.sidebar a.active')?.classList.remove('active');
-            document.querySelector('.view.active')?.classList.remove('active');
+            const menuItem = link.parentElement;
+            
+            // 다른 메뉴는 닫기 (선택사항: 원치 않으면 이 부분 삭제)
+            // document.querySelectorAll('.menu-item').forEach(item => {
+            //     if(item !== menuItem) item.classList.remove('open');
+            // });
+
+            menuItem.classList.toggle('open');
+        });
+    });
+
+    // 2. 실제 뷰 전환 로직
+    subLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            // 액티브 클래스 관리
+            document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
             link.classList.add('active');
+
+            // 뷰 전환
             const targetViewId = link.id.replace('-link', '-view');
             const targetView = document.getElementById(targetViewId);
-            if (targetView) targetView.classList.add('active');
+
+            if (targetView) {
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                targetView.classList.add('active');
+            }
         });
     });
 }

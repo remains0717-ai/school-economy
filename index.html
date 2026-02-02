@@ -77,23 +77,35 @@
         <nav class="sidebar">
             <ul>
                 <li><a href="#" id="home-link" class="active">홈</a></li>
-                <li>
-                    <a href="#" id="bank-link">은행</a>
+                
+                <li class="menu-item menu-group">
+                    <a href="#" class="parent-link">
+                        <span>은행</span>
+                        <span class="chevron"></span>
+                    </a>
                     <ul class="sub-menu">
                         <li><a href="#" id="bank-main-link">중앙 은행</a></li>
                         <li><a href="#" id="deposit-status-link">예/적금 현황</a></li>
                         <li id="admin-bank-mgmt" class="hidden"><a href="#" id="bank-mgmt-link" style="color: #ff4d4d;">은행 관리</a></li>
                     </ul>
                 </li>
-                <li>
-                    <a href="#" id="securities-link">증권</a>
+
+                <li class="menu-item">
+                    <a href="#" class="parent-link">
+                        <span>증권</span>
+                        <span class="chevron"></span>
+                    </a>
                     <ul class="sub-menu">
                         <li><a href="#" id="stock-trading-link">모의 주식 투자</a></li>
                         <li><a href="#" id="portfolio-link">투자 수익률</a></li>
                     </ul>
                 </li>
-                <li id="admin-menu" class="hidden">
-                    <a href="#" id="class-mgmt-link" style="color: #ff4d4d; border-top: 1px solid #444; margin-top: 10px;">학급 관리</a>
+
+                <li id="admin-menu" class="hidden menu-group">
+                    <a href="#" id="class-mgmt-link" class="parent-link" style="color: #ff4d4d;">
+                        <span>학급 관리</span>
+                        <span class="chevron"></span>
+                    </a>
                     <ul class="sub-menu">
                         <li><a href="#" id="import-export-link">보내기 가져오기</a></li>
                         <li><a href="#" id="asset-mgmt-link">자산 관리</a></li>
@@ -110,12 +122,12 @@
             <div id="home-view" class="view active">
                 <h2>현재 자산 현황</h2>
                 <div class="asset-status">
-                    <p>보유 현금: <span id="current-cash">0</span></p>
+                    <p>보유 현금: <span id="current-cash" class="important-metric">0</span></p>
                     <p>은행 예금: <span id="current-bank-balance">0</span></p>
                     <p>상품 자산: <span id="current-goods">0</span></p>
                     <p>주식 평가액: <span id="current-stock-value">0</span></p>
-                    <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
-                    <p style="font-size: 1.4em; color: #00ffdd;">총 자산: <span id="total-assets">0</span></p>
+                    <hr style="border: 0; border-top: 1px solid #444; margin: 25px 0;">
+                    <p style="font-size: 1.4em; color: #00ffdd;">총 자산: <span id="total-assets" class="important-metric">0</span></p>
                 </div>
             </div>
 
