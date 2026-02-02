@@ -167,13 +167,27 @@ class LogPanel extends HTMLElement {
 
 customElements.define('log-panel', LogPanel);
 
+// Firebase Configuration (Replace with your actual config from Firebase Console)
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "your-project.firebaseapp.com",
+    projectId: "your-project",
+    storageBucket: "your-project.appspot.com",
+    messagingSenderId: "your-id",
+    appId: "your-app-id"
+};
+
+// Initialize Firebase
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
+const db = firebase.firestore();
+
 class AuthManager {
     constructor(simulation) {
         this.simulation = simulation;
-        this.users = JSON.parse(localStorage.getItem('users')) || {
-            'admin': { password: 'admin', role: 'admin' }
-        };
-        this.currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+        this.currentUser = null;
 
         this.modal = document.getElementById('auth-modal');
         this.loginContainer = document.getElementById('login-form-container');
@@ -182,7 +196,7 @@ class AuthManager {
         this.toggleText = document.getElementById('auth-toggle-text');
 
         this.initEvents();
-        this.updateUI();
+        this.listenToAuthChanges();
     }
 
     initEvents() {
@@ -212,6 +226,25 @@ class AuthManager {
         };
     }
 
+    listenToAuthChanges() {
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                const userData = userDoc.data();
+                this.currentUser = { 
+                    uid: user.uid, 
+                    username: userData?.username || user.email.split('@')[0], 
+                    role: userData?.role || 'student' 
+                };
+                this.simulation.loadUserData(user.uid);
+            } else {
+                this.currentUser = null;
+                this.simulation.resetData();
+            }
+            this.updateUI();
+        });
+    }
+
     openModal(mode) {
         this.modal.style.display = 'block';
         this.switchMode(mode);
@@ -232,7 +265,6 @@ class AuthManager {
             this.toggleText.innerHTML = `이미 계정이 있으신가요? <a href="#" id="toggle-to-login">로그인</a>`;
         }
         
-        // Re-attach toggle event because innerHTML replaces it
         const newToggle = mode === 'login' ? document.getElementById('toggle-to-signup') : document.getElementById('toggle-to-login');
         newToggle.addEventListener('click', (e) => {
             e.preventDefault();
@@ -240,42 +272,57 @@ class AuthManager {
         });
     }
 
-    login() {
-        const user = document.getElementById('login-username').value;
+    async login() {
+        const username = document.getElementById('login-username').value;
         const pass = document.getElementById('login-password').value;
+        const email = `${username}@school-economy.local`;
 
-        if (this.users[user] && this.users[user].password === pass) {
-            this.currentUser = { username: user, role: this.users[user].role };
-            localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+        try {
+            await auth.signInWithEmailAndPassword(email, pass);
             this.closeModal();
-            this.updateUI();
-            alert(`${user}님, 환영합니다!`);
-        } else {
-            alert('아이디 또는 비밀번호가 틀렸습니다.');
+        } catch (error) {
+            alert('로그인 실패: ' + error.message);
         }
     }
 
-    signup() {
-        const user = document.getElementById('signup-username').value;
+    async signup() {
+        const username = document.getElementById('signup-username').value;
         const pass = document.getElementById('signup-password').value;
         const role = document.getElementById('signup-role').value;
+        const email = `${username}@school-economy.local`;
 
-        if (this.users[user]) {
-            alert('이미 존재하는 아이디입니다.');
-            return;
+        try {
+            const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
+            const user = userCredential.user;
+            
+            await db.collection('users').doc(user.uid).set({
+                username: username,
+                role: role,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            // Initialize player data
+            await db.collection('playerData').doc(user.uid).set({
+                cash: 1000,
+                bankBalance: 0,
+                goods: 0,
+                portfolio: {}
+            });
+
+            alert('회원가입이 완료되었습니다!');
+            this.closeModal();
+        } catch (error) {
+            alert('회원가입 실패: ' + error.message);
         }
-
-        this.users[user] = { password: pass, role: role };
-        localStorage.setItem('users', JSON.stringify(this.users));
-        alert('회원가입이 완료되었습니다. 로그인해주세요.');
-        this.switchMode('login');
     }
 
-    logout() {
-        this.currentUser = null;
-        localStorage.removeItem('currentUser');
-        this.updateUI();
-        alert('로그아웃 되었습니다.');
+    async logout() {
+        try {
+            await auth.signOut();
+            alert('로그아웃 되었습니다.');
+        } catch (error) {
+            console.error('Logout Error:', error);
+        }
     }
 
     updateUI() {
@@ -294,7 +341,6 @@ class AuthManager {
             roleBadge.textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
             roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
             
-            // Role based restrictions
             if (this.currentUser.role === 'admin') {
                 simulationLink.classList.remove('hidden');
             } else {
@@ -339,15 +385,15 @@ function setupNavigation() {
 
 class EconomicSimulation {
     constructor() {
-        this.cash = 1000;
+        this.uid = null;
+        this.cash = 0;
         this.goods = 0;
+        this.bankBalance = 0;
+        this.portfolio = {};
+        
         this.price = 10;
         this.productionCost = 50;
-
-        // Bank and Stock Market Data
-        this.bankBalance = 0;
-        this.interestRate = 0.025; // 2.5% per tick
-        this.portfolio = {}; // { 'AAPL': { amount: 10, avgPrice: 150 } }
+        this.interestRate = 0.025;
         this.currentStockSymbol = null;
         this.currentStockPrice = 0;
 
@@ -356,26 +402,68 @@ class EconomicSimulation {
         this.marketPanel = document.querySelector('market-panel');
         this.logPanel = document.querySelector('log-panel');
 
+        this.initEvents();
+        this.startIntervals();
+    }
+
+    initEvents() {
         this.actionsPanel.shadowRoot.getElementById('produce-btn').addEventListener('click', () => this.produce());
         this.actionsPanel.shadowRoot.getElementById('trade-btn').addEventListener('click', () => this.sell());
 
-        // Bank Events
         document.getElementById('deposit-btn').addEventListener('click', () => this.deposit());
         document.getElementById('withdraw-btn').addEventListener('click', () => this.withdraw());
 
-        // Stock UI Events
         document.getElementById('load-stock-btn').addEventListener('click', () => this.loadStock());
         document.getElementById('buy-stock-btn').addEventListener('click', () => this.buyStock());
         document.getElementById('sell-stock-btn').addEventListener('click', () => this.sellStock());
+    }
 
-        this.updateUI();
+    startIntervals() {
         setInterval(() => this.updateMarket(), 2000);
         setInterval(() => this.updateSimulationStockPrices(), 5000);
-        setInterval(() => this.calculateInterest(), 10000); // Calculate interest every 10 seconds
+        setInterval(() => this.calculateInterest(), 10000);
+    }
+
+    async loadUserData(uid) {
+        this.uid = uid;
+        const doc = await db.collection('playerData').doc(uid).get();
+        if (doc.exists) {
+            const data = doc.data();
+            this.cash = data.cash || 1000;
+            this.goods = data.goods || 0;
+            this.bankBalance = data.bankBalance || 0;
+            this.portfolio = data.portfolio || {};
+            this.updateUI();
+        } else {
+            // New user initialization
+            this.resetData();
+            await this.saveUserData();
+        }
+    }
+
+    async saveUserData() {
+        if (!this.uid) return;
+        await db.collection('playerData').doc(this.uid).set({
+            cash: this.cash,
+            goods: this.goods,
+            bankBalance: this.bankBalance,
+            portfolio: this.portfolio,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    }
+
+    resetData() {
+        this.uid = null;
+        this.cash = 0;
+        this.goods = 0;
+        this.bankBalance = 0;
+        this.portfolio = {};
+        this.updateUI();
     }
 
     // Bank Logic
-    deposit() {
+    async deposit() {
+        if (!this.uid) return alert('로그인이 필요합니다.');
         const amount = parseInt(document.getElementById('bank-amount').value);
         if (isNaN(amount) || amount <= 0) return;
 
@@ -385,12 +473,14 @@ class EconomicSimulation {
             this.logPanel.addMessage(`은행에 ₩${amount.toLocaleString()}을 예금했습니다.`);
             document.getElementById('bank-amount').value = '';
             this.updateUI();
+            await this.saveUserData();
         } else {
             this.logPanel.addMessage('보유 현금이 부족하여 예금할 수 없습니다.');
         }
     }
 
-    withdraw() {
+    async withdraw() {
+        if (!this.uid) return alert('로그인이 필요합니다.');
         const amount = parseInt(document.getElementById('bank-amount').value);
         if (isNaN(amount) || amount <= 0) return;
 
@@ -400,39 +490,45 @@ class EconomicSimulation {
             this.logPanel.addMessage(`은행에서 ₩${amount.toLocaleString()}을 출금했습니다.`);
             document.getElementById('bank-amount').value = '';
             this.updateUI();
+            await this.saveUserData();
         } else {
             this.logPanel.addMessage('예금 잔액이 부족하여 출금할 수 없습니다.');
         }
     }
 
-    calculateInterest() {
-        if (this.bankBalance > 0) {
+    async calculateInterest() {
+        if (this.uid && this.bankBalance > 0) {
             const interest = Math.floor(this.bankBalance * this.interestRate);
             if (interest > 0) {
                 this.bankBalance += interest;
                 this.logPanel.addMessage(`은행 이자가 ₩${interest.toLocaleString()} 발생했습니다.`);
                 this.updateUI();
+                await this.saveUserData();
             }
         }
     }
 
-    produce() {
+    async produce() {
+        if (!this.uid) return alert('로그인이 필요합니다.');
         if (this.cash >= this.productionCost) {
             this.cash -= this.productionCost;
             this.goods++;
             this.logPanel.addMessage(`상품 1개를 ₩${this.productionCost}에 생산했습니다.`);
             this.updateUI();
+            await this.saveUserData();
         } else {
             this.logPanel.addMessage('생산에 필요한 현금이 부족합니다.');
         }
     }
 
-    sell() {
+    async sell() {
+        if (!this.uid) return alert('로그인이 필요합니다.');
         if (this.goods > 0) {
             this.cash += this.price;
             this.goods--;
             this.logPanel.addMessage(`상품 1개를 ₩${this.price.toFixed(2)}에 판매했습니다.`);
             this.updateUI();
+            await this.saveUserData();
         } else {
             this.logPanel.addMessage('판매할 상품이 없습니다.');
         }
@@ -453,31 +549,30 @@ class EconomicSimulation {
         const container = document.getElementById('stock-chart-container');
         container.innerHTML = ''; 
 
-        // Load TradingView Widget
         const script = document.createElement('script');
         script.src = "https://s3.tradingview.com/tv.js";
         script.async = true;
         script.onload = () => {
-            new TradingView.widget({
-                "width": "100%",
-                "height": "100%",
-                "symbol": symbol,
-                "interval": "D",
-                "timezone": "Etc/UTC",
-                "theme": "dark",
-                "style": "1",
-                "locale": "kr",
-                "toolbar_bg": "#f1f3f6",
-                "enable_publishing": false,
-                "allow_symbol_change": true,
-                "container_id": "stock-chart-container"
-            });
+            if (typeof TradingView !== 'undefined') {
+                new TradingView.widget({
+                    "width": "100%",
+                    "height": "100%",
+                    "symbol": symbol,
+                    "interval": "D",
+                    "timezone": "Etc/UTC",
+                    "theme": "dark",
+                    "style": "1",
+                    "locale": "kr",
+                    "toolbar_bg": "#f1f3f6",
+                    "enable_publishing": false,
+                    "allow_symbol_change": true,
+                    "container_id": "stock-chart-container"
+                });
+            }
         };
         document.head.appendChild(script);
 
         document.getElementById('display-stock-name').textContent = symbol;
-        
-        // Mock current price (Real-time price requires a paid API, so we simulate it based on a base price)
         this.currentStockPrice = 100 + Math.random() * 900; 
         this.logPanel.addMessage(`${symbol} 차트를 불러왔습니다.`);
         this.updateUI();
@@ -491,7 +586,8 @@ class EconomicSimulation {
         }
     }
 
-    buyStock() {
+    async buyStock() {
+        if (!this.uid) return alert('로그인이 필요합니다.');
         const amount = parseInt(document.getElementById('trade-amount').value);
         if (!this.currentStockSymbol || isNaN(amount) || amount <= 0) return;
 
@@ -512,12 +608,14 @@ class EconomicSimulation {
             
             this.logPanel.addMessage(`${this.currentStockSymbol} ${amount}주를 ₩${this.currentStockPrice.toFixed(2)}에 매수했습니다.`);
             this.updateUI();
+            await this.saveUserData();
         } else {
             this.logPanel.addMessage('주식 매수에 필요한 현금이 부족합니다.');
         }
     }
 
-    sellStock() {
+    async sellStock() {
+        if (!this.uid) return alert('로그인이 필요합니다.');
         const amount = parseInt(document.getElementById('trade-amount').value);
         if (!this.currentStockSymbol || !this.portfolio[this.currentStockSymbol] || isNaN(amount) || amount <= 0) return;
 
@@ -531,6 +629,7 @@ class EconomicSimulation {
             
             this.logPanel.addMessage(`${this.currentStockSymbol} ${amount}주를 ₩${this.currentStockPrice.toFixed(2)}에 매도했습니다.`);
             this.updateUI();
+            await this.saveUserData();
         } else {
             this.logPanel.addMessage('보유 수량이 부족하여 매도할 수 없습니다.');
         }
@@ -540,7 +639,6 @@ class EconomicSimulation {
         if (this.resourcesPanel) this.resourcesPanel.update(Math.floor(this.cash), this.goods);
         if (this.marketPanel) this.marketPanel.update(this.price);
 
-        // Update Home View
         document.getElementById('current-cash').textContent = Math.floor(this.cash).toLocaleString();
         document.getElementById('current-bank-balance').textContent = Math.floor(this.bankBalance).toLocaleString();
         document.getElementById('current-goods').textContent = this.goods;
@@ -554,16 +652,13 @@ class EconomicSimulation {
         const totalAssets = this.cash + this.bankBalance + stockValue;
         document.getElementById('total-assets').textContent = Math.floor(totalAssets).toLocaleString();
 
-        // Update Bank View
         const bankBalanceEl = document.getElementById('bank-balance-amount');
         if (bankBalanceEl) bankBalanceEl.textContent = Math.floor(this.bankBalance).toLocaleString();
 
-        // Update Stock Trading View
         if (this.currentStockSymbol) {
             document.getElementById('current-stock-price').textContent = this.currentStockPrice.toFixed(2);
         }
 
-        // Update Portfolio Table
         const tbody = document.getElementById('portfolio-body');
         if (tbody) {
             tbody.innerHTML = '';
