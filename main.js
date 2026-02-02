@@ -324,20 +324,38 @@ class AuthManager {
         const username = document.getElementById('login-username').value.trim().toLowerCase();
         const pass = document.getElementById('login-password').value;
         
-        // Find if it's an admin (real email) or student (virtual email)
-        // Since we don't know the role before login, we attempt both or rely on the virtual format for students
-        // To handle both, we first check if the input is an email format
         const isEmail = username.includes('@');
         const email = isEmail ? username : `${username}@school-economy.local`;
 
         try {
             await auth.signInWithEmailAndPassword(email, pass);
             this.closeModal();
-            alert('로그인되었습니다.');
+            alert('로그인이 완료되었습니다. 환영합니다!');
         } catch (error) {
-            let msg = '로그인 실패: 아이디 또는 비밀번호를 확인해주세요.';
-            if (error.code === 'auth/user-not-found') msg = '존재하지 않는 계정입니다.';
-            if (error.code === 'auth/wrong-password') msg = '비밀번호가 틀렸습니다.';
+            console.error("Login Error Code:", error.code);
+            let msg = '로그인에 실패했습니다.';
+            
+            // Firebase 보안 정책에 따라 에러 코드가 다를 수 있습니다.
+            switch (error.code) {
+                case 'auth/user-not-found':
+                    msg = '가입되지 않은 아이디입니다. 아이디를 확인하거나 회원가입을 해주세요.';
+                    break;
+                case 'auth/wrong-password':
+                    msg = '비밀번호가 일치하지 않습니다.';
+                    break;
+                case 'auth/invalid-credential':
+                    // 최신 Firebase 보안 정책에서는 아이디/비번 에러를 통합해서 보냅니다.
+                    msg = '아이디가 존재하지 않거나 비밀번호가 틀렸습니다.\n(관리자 계정이라면 가입 시 입력한 이메일을 입력했는지 확인해주세요.)';
+                    break;
+                case 'auth/invalid-email':
+                    msg = '아이디 또는 이메일 형식이 올바르지 않습니다.';
+                    break;
+                case 'auth/too-many-requests':
+                    msg = '너무 많은 로그인 시도가 감지되었습니다. 잠시 후 다시 시도해주세요.';
+                    break;
+                default:
+                    msg = '로그인 중 오류가 발생했습니다: ' + error.message;
+            }
             alert(msg);
         }
     }
