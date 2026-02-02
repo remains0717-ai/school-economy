@@ -8,8 +8,47 @@
 </head>
 <body>
     <header>
-        <h1>모의 경제 시뮬레이션</h1>
+        <div class="header-container">
+            <h1>모의 경제 시뮬레이션</h1>
+            <div class="auth-controls">
+                <button id="login-btn" class="auth-btn">로그인</button>
+                <button id="signup-btn" class="auth-btn">회원가입</button>
+                <div id="user-info" class="hidden">
+                    <span id="user-display-name"></span>
+                    <span id="user-role-badge"></span>
+                    <button id="logout-btn" class="auth-btn">로그아웃</button>
+                </div>
+            </div>
+        </div>
     </header>
+
+    <!-- Authentication Modal -->
+    <div id="auth-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div id="login-form-container">
+                <h2>로그인</h2>
+                <form id="login-form">
+                    <input type="text" id="login-username" placeholder="아이디" required>
+                    <input type="password" id="login-password" placeholder="비밀번호" required>
+                    <button type="submit">로그인</button>
+                </form>
+            </div>
+            <div id="signup-form-container" class="hidden">
+                <h2>회원가입</h2>
+                <form id="signup-form">
+                    <input type="text" id="signup-username" placeholder="아이디" required>
+                    <input type="password" id="signup-password" placeholder="비밀번호" required>
+                    <select id="signup-role">
+                        <option value="student">학생</option>
+                        <option value="admin">관리자</option>
+                    </select>
+                    <button type="submit">가입하기</button>
+                </form>
+            </div>
+            <p id="auth-toggle-text">계정이 없으신가요? <a href="#" id="toggle-to-signup">회원가입</a></p>
+        </div>
+    </div>
     <div class="container">
         <nav class="sidebar">
             <ul>

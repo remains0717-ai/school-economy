@@ -167,6 +167,148 @@ class LogPanel extends HTMLElement {
 
 customElements.define('log-panel', LogPanel);
 
+class AuthManager {
+    constructor(simulation) {
+        this.simulation = simulation;
+        this.users = JSON.parse(localStorage.getItem('users')) || {
+            'admin': { password: 'admin', role: 'admin' }
+        };
+        this.currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+
+        this.modal = document.getElementById('auth-modal');
+        this.loginContainer = document.getElementById('login-form-container');
+        this.signupContainer = document.getElementById('signup-form-container');
+        this.toggleLink = document.getElementById('toggle-to-signup');
+        this.toggleText = document.getElementById('auth-toggle-text');
+
+        this.initEvents();
+        this.updateUI();
+    }
+
+    initEvents() {
+        document.getElementById('login-btn').addEventListener('click', () => this.openModal('login'));
+        document.getElementById('signup-btn').addEventListener('click', () => this.openModal('signup'));
+        document.querySelector('.close-modal').addEventListener('click', () => this.closeModal());
+        document.getElementById('logout-btn').addEventListener('click', () => this.logout());
+
+        this.toggleLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isLogin = this.signupContainer.classList.contains('hidden');
+            this.switchMode(isLogin ? 'signup' : 'login');
+        });
+
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.login();
+        });
+
+        document.getElementById('signup-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.signup();
+        });
+
+        window.onclick = (event) => {
+            if (event.target == this.modal) this.closeModal();
+        };
+    }
+
+    openModal(mode) {
+        this.modal.style.display = 'block';
+        this.switchMode(mode);
+    }
+
+    closeModal() {
+        this.modal.style.display = 'none';
+    }
+
+    switchMode(mode) {
+        if (mode === 'login') {
+            this.loginContainer.classList.remove('hidden');
+            this.signupContainer.classList.add('hidden');
+            this.toggleText.innerHTML = `계정이 없으신가요? <a href="#" id="toggle-to-signup">회원가입</a>`;
+        } else {
+            this.loginContainer.classList.add('hidden');
+            this.signupContainer.classList.remove('hidden');
+            this.toggleText.innerHTML = `이미 계정이 있으신가요? <a href="#" id="toggle-to-login">로그인</a>`;
+        }
+        
+        // Re-attach toggle event because innerHTML replaces it
+        const newToggle = mode === 'login' ? document.getElementById('toggle-to-signup') : document.getElementById('toggle-to-login');
+        newToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.switchMode(mode === 'login' ? 'signup' : 'login');
+        });
+    }
+
+    login() {
+        const user = document.getElementById('login-username').value;
+        const pass = document.getElementById('login-password').value;
+
+        if (this.users[user] && this.users[user].password === pass) {
+            this.currentUser = { username: user, role: this.users[user].role };
+            localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+            this.closeModal();
+            this.updateUI();
+            alert(`${user}님, 환영합니다!`);
+        } else {
+            alert('아이디 또는 비밀번호가 틀렸습니다.');
+        }
+    }
+
+    signup() {
+        const user = document.getElementById('signup-username').value;
+        const pass = document.getElementById('signup-password').value;
+        const role = document.getElementById('signup-role').value;
+
+        if (this.users[user]) {
+            alert('이미 존재하는 아이디입니다.');
+            return;
+        }
+
+        this.users[user] = { password: pass, role: role };
+        localStorage.setItem('users', JSON.stringify(this.users));
+        alert('회원가입이 완료되었습니다. 로그인해주세요.');
+        this.switchMode('login');
+    }
+
+    logout() {
+        this.currentUser = null;
+        localStorage.removeItem('currentUser');
+        this.updateUI();
+        alert('로그아웃 되었습니다.');
+    }
+
+    updateUI() {
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
+        const userInfo = document.getElementById('user-info');
+        const userDisplay = document.getElementById('user-display-name');
+        const roleBadge = document.getElementById('user-role-badge');
+        const simulationLink = document.getElementById('simulation-link');
+
+        if (this.currentUser) {
+            loginBtn.classList.add('hidden');
+            signupBtn.classList.add('hidden');
+            userInfo.classList.remove('hidden');
+            userDisplay.textContent = this.currentUser.username;
+            roleBadge.textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
+            roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
+            
+            // Role based restrictions
+            if (this.currentUser.role === 'admin') {
+                simulationLink.classList.remove('hidden');
+            } else {
+                simulationLink.classList.add('hidden');
+            }
+        } else {
+            loginBtn.classList.remove('hidden');
+            signupBtn.classList.remove('hidden');
+            userInfo.classList.add('hidden');
+            simulationLink.classList.add('hidden');
+        }
+    }
+}
+
 function setupNavigation() {
     const navLinks = document.querySelectorAll('.sidebar a');
     const views = document.querySelectorAll('.view');
@@ -448,5 +590,6 @@ class EconomicSimulation {
 
 window.addEventListener('load', () => {
     setupNavigation();
-    new EconomicSimulation();
+    const simulation = new EconomicSimulation();
+    new AuthManager(simulation);
 });
