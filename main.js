@@ -283,11 +283,13 @@ class AuthManager {
 
     listenToAuthChanges() {
         auth.onAuthStateChanged(async (user) => {
+            console.log("Auth State Changed. User:", user ? user.email : "Logged Out");
             if (user) {
                 try {
                     const userDoc = await db.collection('users').doc(user.uid).get();
                     if (userDoc.exists) {
                         const userData = userDoc.data();
+                        console.log("User Data Found in Firestore:", userData);
                         this.currentUser = { 
                             uid: user.uid, 
                             username: userData.username, 
@@ -296,16 +298,16 @@ class AuthManager {
                         };
                         this.simulation.loadUserData(user.uid);
                     } else {
-                        console.error("User document not found in Firestore");
+                        console.error("Firestore에 사용자 문서가 없습니다! UID:", user.uid);
                         this.currentUser = null;
                     }
                 } catch (error) {
-                    console.error("Error fetching user data:", error);
+                    console.error("사용자 데이터 로딩 오류:", error);
                     this.currentUser = null;
                 }
             } else {
                 this.currentUser = null;
-                this.simulation.resetData();
+                if (this.simulation) this.simulation.resetData();
             }
             this.updateUI();
         });
@@ -364,7 +366,6 @@ class AuthManager {
         const username = document.getElementById('login-username').value.trim();
         const pass = document.getElementById('login-password').value;
         
-        // 아이디에 @가 포함되어 있거나 이미 .local 형식이면 그대로 사용, 아니면 가상 이메일 생성
         const email = (username.includes('@')) ? username : `${username.toLowerCase()}@school-economy.local`;
 
         try {
@@ -375,7 +376,6 @@ class AuthManager {
             console.error("Login Error Code:", error.code);
             let msg = '로그인에 실패했습니다.';
             
-            // Firebase 보안 정책에 따라 에러 코드가 다를 수 있습니다.
             switch (error.code) {
                 case 'auth/user-not-found':
                     msg = '가입되지 않은 아이디입니다. 아이디를 확인하거나 회원가입을 해주세요.';
@@ -384,7 +384,6 @@ class AuthManager {
                     msg = '비밀번호가 일치하지 않습니다.';
                     break;
                 case 'auth/invalid-credential':
-                    // 최신 Firebase 보안 정책에서는 아이디/비번 에러를 통합해서 보냅니다.
                     msg = '아이디가 존재하지 않거나 비밀번호가 틀렸습니다.\n(관리자 계정이라면 가입 시 입력한 이메일을 입력했는지 확인해주세요.)';
                     break;
                 case 'auth/invalid-email':
@@ -417,7 +416,6 @@ class AuthManager {
             return;
         }
 
-        // 학생 가입 시 학급 코드 검증
         if (role === 'student') {
             try {
                 const adminQuery = await db.collection('users').where('classCode', '==', studentClassCode).get();
@@ -431,7 +429,6 @@ class AuthManager {
             }
         }
 
-        // 관리자는 이메일 앞부분을 아이디로 자동 설정
         if (role === 'admin') {
             if (!adminEmail) {
                 alert('이메일을 입력해 주세요.');
@@ -497,40 +494,52 @@ class AuthManager {
     }
 
     updateUI() {
-        const loginBtn = document.getElementById('login-btn');
-        const signupBtn = document.getElementById('signup-btn');
-        const userInfo = document.getElementById('user-info');
-        const userDisplay = document.getElementById('user-display-name');
-        const roleBadge = document.getElementById('user-role-badge');
-        const simulationLink = document.getElementById('simulation-link');
-        const adminMenu = document.getElementById('admin-menu');
+        console.log("updateUI 호출됨. 현재 사용자:", this.currentUser);
+        try {
+            const loginBtn = document.getElementById('login-btn');
+            const signupBtn = document.getElementById('signup-btn');
+            const userInfo = document.getElementById('user-info');
+            const userDisplay = document.getElementById('user-display-name');
+            const roleBadge = document.getElementById('user-role-badge');
+            const simulationLink = document.getElementById('simulation-link');
+            const adminMenu = document.getElementById('admin-menu');
 
-        if (this.currentUser) {
-            loginBtn.classList.add('hidden');
-            signupBtn.classList.add('hidden');
-            userInfo.classList.remove('hidden');
-            userDisplay.textContent = this.currentUser.username;
-            roleBadge.textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
-            roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
-            
-            if (this.currentUser.role === 'admin') {
-                simulationLink.classList.remove('hidden');
-                adminMenu.classList.remove('hidden');
-                document.getElementById('mgmt-class-code').textContent = this.currentUser.classCode;
-                if (this.currentUser.classCode) {
-                    userDisplay.textContent += ` [코드: ${this.currentUser.classCode}]`;
+            if (this.currentUser) {
+                if (loginBtn) loginBtn.classList.add('hidden');
+                if (signupBtn) signupBtn.classList.add('hidden');
+                if (userInfo) userInfo.classList.remove('hidden');
+                
+                if (userDisplay) {
+                    userDisplay.textContent = this.currentUser.username;
+                    if (this.currentUser.role === 'admin' && this.currentUser.classCode) {
+                        userDisplay.textContent += ` [코드: ${this.currentUser.classCode}]`;
+                    }
                 }
-                this.loadStudentList();
+
+                if (roleBadge) {
+                    roleBadge.textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
+                    roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
+                }
+                
+                if (this.currentUser.role === 'admin') {
+                    if (simulationLink) simulationLink.classList.remove('hidden');
+                    if (adminMenu) adminMenu.classList.remove('hidden');
+                    const mgmtCode = document.getElementById('mgmt-class-code');
+                    if (mgmtCode) mgmtCode.textContent = this.currentUser.classCode;
+                    this.loadStudentList();
+                } else {
+                    if (simulationLink) simulationLink.classList.add('hidden');
+                    if (adminMenu) adminMenu.classList.add('hidden');
+                }
             } else {
-                simulationLink.classList.add('hidden');
-                adminMenu.classList.add('hidden');
+                if (loginBtn) loginBtn.classList.remove('hidden');
+                if (signupBtn) signupBtn.classList.remove('hidden');
+                if (userInfo) userInfo.classList.add('hidden');
+                if (simulationLink) simulationLink.classList.add('hidden');
+                if (adminMenu) adminMenu.classList.add('hidden');
             }
-        } else {
-            loginBtn.classList.remove('hidden');
-            signupBtn.classList.remove('hidden');
-            userInfo.classList.add('hidden');
-            simulationLink.classList.add('hidden');
-            adminMenu.classList.add('hidden');
+        } catch (err) {
+            console.error("UI 업데이트 중 에러 발생:", err);
         }
     }
 
