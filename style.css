@@ -144,6 +144,46 @@ header { background-color: #0d0d0d; padding: 10px 0; border-bottom: 1px solid va
 .info-section { border-right: 1px solid #333; padding-right: 30px; }
 .order-section { border-right: 1px solid #333; padding-right: 30px; }
 
+/* Table Enhancements */
+table th {
+    background: #1a1a1a;
+    color: #888;
+    font-size: 0.8rem;
+    padding: 15px 10px;
+    text-align: left;
+    border-bottom: 2px solid #333;
+}
+
+td { 
+    background: var(--bg-panel); 
+    padding: 15px 12px; 
+    border-top: 1px solid #2a2a2a;
+    vertical-align: middle;
+}
+
+.badge-rate {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--danger);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.85rem;
+}
+
+.text-dim { color: #666; font-size: 0.85rem; }
+.text-highlight { color: #fff; font-weight: 700; }
+.text-danger { color: var(--danger); font-weight: bold; }
+
+.date-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.2;
+}
+
+.date-box .start-date { font-size: 0.75rem; color: #666; }
+.date-box .end-date { font-size: 0.85rem; color: var(--secondary); font-weight: bold; }
+
 .inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 15px; }
 .inventory-item { background: #252525; border: 1px solid #333; padding: 15px; border-radius: 12px; text-align: center; font-size: 0.9rem; }
 .inventory-item span { display: block; color: var(--primary); font-weight: bold; margin-bottom: 5px; }

@@ -267,6 +267,7 @@ class AuthManager {
 
         setT('student-deposit-rate', `${br}%`);
         setT('student-maturity-hours', `${mh}시간`);
+        setT('loan-maturity-display', `${mh}시간`);
         setT('display-loan-rate', `${(br + ls).toFixed(1)}%`);
 
         // 상점 설정 반영
@@ -288,8 +289,8 @@ class AuthManager {
             this.adminListUnsub = null;
         }
 
-        // [1] 학생 목록 (onSnapshot으로 실시간 연동)
-        this.adminListUnsub = db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(async snap => {
+        // [1] 모든 계정 목록 (onSnapshot으로 실시간 연동)
+        this.adminListUnsub = db.collection('users').where('adminCode','==',code).onSnapshot(async snap => {
             const assetBody = document.getElementById('asset-mgmt-body');
             const accBody = document.getElementById('student-list-body');
             const jobBody = document.getElementById('job-mgmt-body');
@@ -418,8 +419,9 @@ class AuthManager {
             await db.collection('users').doc(cred.user.uid).set({
                 username, role, email: finalEmail, balance: 1000, bankBalance: 0,
                 classCode: role === 'admin' ? classCode : "",
-                adminCode: role === 'student' ? code : "",
-                isAuthorized: false, creditScore: 500
+                adminCode: role === 'student' ? code : classCode, // 관리자도 본인 코드를 adminCode에 저장
+                isAuthorized: role === 'admin', // 관리자는 자동 승인
+                creditScore: 500
             });
             alert("가입 성공!"); location.reload();
         } catch (err) { alert(err.message); }
@@ -841,12 +843,13 @@ class EconomicSimulation {
             
             const pSnap = await db.collection('users').doc(this.user.uid)
                 .collection('inventory')
-                .where('itemName', '==', itemName)
                 .where('timestamp', '>=', firebase.firestore.Timestamp.fromDate(today))
                 .get();
             
-            if (pSnap.size + quantity > dailyLimit) {
-                return alert(`일일 구매 제한을 초과했습니다. (오늘 이미 ${pSnap.size}개 구매 / 남은 가능 수량: ${dailyLimit - pSnap.size}개)`);
+            const todayBuyCount = pSnap.docs.filter(doc => doc.data().itemName === itemName).length;
+            
+            if (todayBuyCount + quantity > dailyLimit) {
+                return alert(`일일 구매 제한을 초과했습니다. (오늘 이미 ${todayBuyCount}개 구매 / 남은 가능 수량: ${dailyLimit - todayBuyCount}개)`);
             }
         }
 
@@ -1007,6 +1010,8 @@ class EconomicSimulation {
 
         const data = window.userState.classData;
         const loanRate = (data.baseRate || 0) + (data.loanSpread || 2.0);
+        const maturityDate = new Date();
+        maturityDate.setHours(maturityDate.getHours() + (data.maturityHours || 24));
 
         try {
             const batch = db.batch();
@@ -1019,7 +1024,8 @@ class EconomicSimulation {
                 amount: amt,
                 rate: loanRate,
                 status: 'active',
-                timestamp: firebase.firestore.Timestamp.now()
+                timestamp: firebase.firestore.Timestamp.now(),
+                maturityAt: firebase.firestore.Timestamp.fromDate(maturityDate)
             });
             await batch.commit();
             amtInput.value = '';
@@ -1046,20 +1052,34 @@ class EconomicSimulation {
                 const loanDate = d.timestamp.toDate();
                 const hoursPassed = Math.floor((now - loanDate) / (1000 * 60 * 60));
                 
-                // 간단한 이자 계산 시뮬레이션: 1시간당 (연리/8760) 적용
-                const interest = Math.floor(d.amount * (d.rate / 100) * (hoursPassed / 8760) * 100); // 가독성을 위해 100배 가속 시뮬레이션 가능
-                const totalToPay = d.amount + interest;
+                // 만기 기간(Term) 기반 이자 계산: 1만기당 설정된 금리 적용
+                const maturityHours = window.userState.classData?.maturityHours || 24;
+                const termsPassed = hoursPassed / maturityHours;
+                
+                // 현재까지 쌓인 실시간 이자
+                const currentInterest = Math.floor(d.amount * (d.rate / 100) * termsPassed); 
+                // 만기 시 지불할 총 이자
+                const fullInterest = Math.floor(d.amount * (d.rate / 100));
+                
+                const totalToPay = d.amount + currentInterest;
+                const maturityDate = d.maturityAt ? d.maturityAt.toDate() : new Date(loanDate.getTime() + maturityHours * 60 * 60 * 1000);
 
                 totalDebt += d.amount;
-                totalInterest += interest;
+                totalInterest += currentInterest;
 
                 body.innerHTML += `<tr>
-                    <td>₩${d.amount.toLocaleString()}</td>
-                    <td>${d.rate}%</td>
-                    <td style="color:var(--danger)">₩${interest.toLocaleString()}</td>
-                    <td><strong>₩${totalToPay.toLocaleString()}</strong></td>
-                    <td>${loanDate.toLocaleString()}</td>
-                    <td><button onclick="window.simulation.repayLoan('${doc.id}', ${totalToPay}, ${d.amount})" class="auth-btn" style="font-size:0.8rem; padding:5px 10px;">상환</button></td>
+                    <td><strong class="text-highlight">₩${d.amount.toLocaleString()}</strong></td>
+                    <td><span class="badge-rate">${d.rate}%</span></td>
+                    <td class="text-danger">₩${currentInterest.toLocaleString()}</td>
+                    <td class="text-dim">₩${fullInterest.toLocaleString()}</td>
+                    <td><strong class="important-metric" style="font-size:1rem;">₩${totalToPay.toLocaleString()}</strong></td>
+                    <td>
+                        <div class="date-box">
+                            <span class="start-date">${loanDate.toLocaleDateString()} ${loanDate.getHours()}:${loanDate.getMinutes()} 시작</span>
+                            <span class="end-date">${maturityDate.toLocaleDateString()} ${maturityDate.getHours()}:${maturityDate.getMinutes()} 만기</span>
+                        </div>
+                    </td>
+                    <td><button onclick="window.simulation.repayLoan('${doc.id}', ${totalToPay}, ${d.amount})" class="auth-btn" style="font-size:0.8rem; padding:8px 12px; background:#444;">상환</button></td>
                 </tr>`;
             });
 
@@ -1243,20 +1263,31 @@ window.openPurchaseModal = async (itemId, itemName, price, stock, dailyLimit) =>
     const limitInfoEl = document.getElementById('buy-limit-info');
     const confirmBtn = document.getElementById('confirm-purchase-btn');
 
+    if (!modal || !window.userState.currentUser) return;
+
     nameEl.textContent = itemName;
     priceUnitEl.textContent = `단가: ₩ ${price.toLocaleString()}`;
     qtyInput.value = 1;
     
-    let remaining = dailyLimit || 999;
+    let remaining = dailyLimit || 9999;
     if (dailyLimit > 0) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const pSnap = await db.collection('users').doc(window.userState.currentUser.uid).collection('inventory')
-            .where('itemName', '==', itemName)
-            .where('timestamp', '>=', firebase.firestore.Timestamp.fromDate(today))
-            .get();
-        remaining = Math.max(0, dailyLimit - pSnap.size);
-        limitInfoEl.textContent = `오늘 구매 가능 수량: ${remaining}개 / ${dailyLimit}개`;
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // 인덱스 오류 방지를 위해 필터링을 최소화하고 가져온 후 자바스크립트에서 체크
+            const pSnap = await db.collection('users').doc(window.userState.currentUser.uid)
+                .collection('inventory')
+                .where('timestamp', '>=', firebase.firestore.Timestamp.fromDate(today))
+                .get();
+            
+            const todayBuyCount = pSnap.docs.filter(doc => doc.data().itemName === itemName).length;
+            remaining = Math.max(0, dailyLimit - todayBuyCount);
+            limitInfoEl.textContent = `오늘 구매 가능: ${remaining}개 (총 ${dailyLimit}개 제한)`;
+        } catch (e) {
+            console.error("Limit check error:", e);
+            remaining = dailyLimit; // 오류 시 일단 제한 수치로 설정
+        }
     } else {
         limitInfoEl.textContent = "일일 구매 제한이 없는 상품입니다.";
     }
