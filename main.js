@@ -322,7 +322,14 @@ class AuthManager {
                     const status = d.isAuthorized ? '<span style="color:var(--primary)">승인됨</span>' : '<span style="color:var(--danger)">미승인</span>';
                     const btnText = d.isAuthorized ? "승인 취소" : "승인 하기";
                     const btnColor = d.isAuthorized ? "var(--danger)" : "var(--primary)";
-                    accBody.innerHTML += `<tr><td>${displayName}</td><td>${status}</td><td><button onclick="window.toggleApproval('${uid}', ${!d.isAuthorized})" style="background:${btnColor}">${btnText}</button></td></tr>`;
+                    accBody.innerHTML += `<tr>
+                        <td>${displayName}</td>
+                        <td>${status}</td>
+                        <td>
+                            <button onclick="window.toggleApproval('${uid}', ${!d.isAuthorized})" style="background:${btnColor}">${btnText}</button>
+                            ${!isMe ? `<button onclick="window.deleteAccount('${uid}', '${d.username}')" style="background:var(--danger); margin-left:5px;">삭제</button>` : ''}
+                        </td>
+                    </tr>`;
                 }
 
                 // [직업 관리 탭]
@@ -1521,6 +1528,38 @@ window.sendBulkAssets = async () => {
 };
 
 window.toggleApproval = async (uid, s) => { await db.collection('users').doc(uid).update({ isAuthorized: s }); };
+
+window.deleteAccount = async (uid, username) => {
+    if (uid === auth.currentUser.uid) return alert("관리자 본인의 계정은 삭제할 수 없습니다.");
+    if (!confirm(`[${username}] 계정을 정말로 삭제하시겠습니까?\n이 사용자의 모든 자산, 주식, 대출, 아이템 데이터가 영구히 삭제됩니다.`)) return;
+
+    try {
+        const userRef = db.collection('users').doc(uid);
+        
+        // 하위 컬렉션 삭제를 위한 헬퍼 (배치 처리)
+        const deleteSubcollection = async (collectionName) => {
+            const snap = await userRef.collection(collectionName).get();
+            const batch = db.batch();
+            snap.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+        };
+
+        // 1. 모든 하위 데이터 삭제
+        await Promise.all([
+            deleteSubcollection('portfolio'),
+            deleteSubcollection('deposits'),
+            deleteSubcollection('loans'),
+            deleteSubcollection('inventory')
+        ]);
+
+        // 2. 메인 유저 문서 삭제
+        await userRef.delete();
+
+        alert(`[${username}] 계정의 모든 데이터가 삭제되었습니다.`);
+        logActivity('admin', `계정 영구 삭제: ${username} (${uid})`);
+    } catch (err) { alert("삭제 실패: " + err.message); }
+};
+
 window.updateJobInfo = async (uid, btn) => {
     const row = btn.closest('tr');
     const job = row.querySelector('.job-input').value;
