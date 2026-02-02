@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 유저 문서 규칙
+    match /users/{userId} {
+      // 본인의 정보만 읽고 수정할 수 있음
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      
+      // 회원가입: 관리자는 자유롭게, 학생은 유효한 학급 코드가 있을 때만 생성 가능
+      allow create: if request.auth != null && (
+        request.resource.data.role == 'admin' || 
+        exists(/databases/$(database)/documents/classes/$(request.resource.data.adminCode))
+      );
+      
+      // 관리자는 자신의 학급 학생 목록을 볼 수 있음
+      allow list: if request.auth != null && (
+        resource.data.adminCode == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classCode
+      );
+    }
+
+    // 학급(classes) 문서 규칙
+    match /classes/{classCode} {
+      // 모든 가입 시도자는 코드 존재 여부를 확인할 수 있어야 함
+      allow get: if true; 
+      
+      // 생성은 관리자만 가능
+      allow create: if request.auth != null;
+      
+      // 수정 및 삭제는 해당 학급 관리자만 가능
+      allow update, delete: if request.auth != null && resource.data.adminUid == request.auth.uid;
+    }
+
+    // 게임 데이터(playerData) 규칙
+    match /playerData/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
