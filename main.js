@@ -410,79 +410,89 @@ class AuthManager {
     }
 
     async signup() {
-        const roleSelect = document.getElementById('signup-role');
-        const passInput = document.getElementById('signup-password');
-        const emailInput = document.getElementById('signup-email');
-        const usernameInput = document.getElementById('signup-username');
-        const classCodeInput = document.getElementById('signup-class-code');
+        console.log("--- 회원가입 프로세스 시작 ---");
+        
+        try {
+            const roleSelect = document.getElementById('signup-role');
+            const passInput = document.getElementById('signup-password');
+            const emailInput = document.getElementById('signup-email');
+            const usernameInput = document.getElementById('signup-username');
+            const classCodeInput = document.getElementById('signup-class-code');
 
-        const role = roleSelect ? roleSelect.value : 'student';
-        const pass = passInput ? passInput.value : '';
-        const adminEmail = emailInput ? emailInput.value.trim() : '';
-        let username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
-        const inputCode = classCodeInput ? classCodeInput.value.trim().toUpperCase() : '';
+            const role = roleSelect ? roleSelect.value : 'student';
+            const pass = passInput ? passInput.value : '';
+            const adminEmail = emailInput ? emailInput.value.trim() : '';
+            let username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
+            const inputCode = classCodeInput ? classCodeInput.value.trim().toUpperCase() : '';
 
-        if (pass.length < 6) {
-            alert('비밀번호는 최소 6자 이상이어야 합니다.');
-            return;
-        }
-
-        if (role === 'student' && !username) {
-            alert('아이디를 입력해 주세요.');
-            return;
-        }
-
-        // [가이드 준수] 학생 가입 시 입력한 학급코드가 Firestore 'classes'에 있는지 먼저 확인
-        if (role === 'student') {
-            try {
-                const classDoc = await db.collection('classes').doc(inputCode).get();
-                if (!classDoc.exists) {
-                    alert('유효하지 않은 학급 코드입니다. 관리자에게 확인해 주세요.');
-                    return;
-                }
-            } catch (err) {
-                console.error("Class Verification Error:", err);
-                alert('학급 코드 확인 중 오류가 발생했습니다.');
+            // 1. 기본 유효성 검사
+            if (pass.length < 6) {
+                alert('비밀번호는 최소 6자 이상이어야 합니다.');
                 return;
             }
-        }
 
-        // 관리자는 이메일 앞부분을 아이디로 사용, 학생은 입력한 아이디 사용
-        if (role === 'admin') {
-            if (!adminEmail) { alert('이메일을 입력해 주세요.'); return; }
-            username = adminEmail.split('@')[0];
-        }
+            if (role === 'student' && !username) {
+                alert('아이디를 입력해 주세요.');
+                return;
+            }
 
-        // [가이드 준수] 가상 이메일 도메인을 @student.com으로 설정
-        const email = role === 'admin' ? adminEmail : `${username}@student.com`;
+            if (role === 'student' && !inputCode) {
+                alert('학급 코드를 입력해 주세요.');
+                return;
+            }
 
-        try {
-            const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
+            // 2. 학급 코드 검증 (학생 전용)
+            if (role === 'student') {
+                console.log("학급 코드 검증 중:", inputCode);
+                const classDoc = await db.collection('classes').doc(inputCode).get();
+                if (!classDoc.exists) {
+                    alert('유효하지 않은 학급 코드입니다. 선생님께 확인해 주세요.');
+                    return;
+                }
+                console.log("학급 코드 확인 완료");
+            }
+
+            // 3. 이메일 형식 결정
+            if (role === 'admin') {
+                if (!adminEmail || !adminEmail.includes('@')) {
+                    alert('올바른 관리자 이메일을 입력해 주세요.');
+                    return;
+                }
+                username = adminEmail.split('@')[0];
+            }
+            const finalEmail = role === 'admin' ? adminEmail : `${username}@student.com`;
+            console.log("가입 시도 이메일:", finalEmail);
+
+            // 4. Firebase Auth 가입 시도
+            console.log("Firebase Auth 통신 시작...");
+            const userCredential = await auth.createUserWithEmailAndPassword(finalEmail, pass);
             const user = userCredential.user;
-            
+            console.log("Auth 가입 성공. UID:", user.uid);
+
+            // 5. Firestore 데이터 작성
             let generatedClassCode = null;
             if (role === 'admin') {
-                // [가이드 준수] 관리자는 고유한 8자리 classCode 부여 및 'classes' 컬렉션 저장
                 generatedClassCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+                console.log("관리자 학급 생성 중:", generatedClassCode);
                 await db.collection('classes').doc(generatedClassCode).set({
                     adminUid: user.uid,
-                    adminEmail: email,
+                    adminEmail: finalEmail,
                     className: `${username} 선생님의 학급`,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
             }
 
-            // [가이드 준수] 사용자 문서 저장 (학생은 adminCode 필드 포함)
+            console.log("사용자 프로필 저장 중...");
             await db.collection('users').doc(user.uid).set({
                 username: username,
                 role: role,
-                email: email,
-                classCode: role === 'admin' ? generatedClassCode : null,
-                adminCode: role === 'student' ? inputCode : null, // 제안하신 필드명 적용
+                email: finalEmail,
+                classCode: role === 'admin' ? generatedClassCode : "",
+                adminCode: role === 'student' ? inputCode : "",
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            // 초기 자산 데이터 생성
+            console.log("초기 자산 데이터 생성 중...");
             await db.collection('playerData').doc(user.uid).set({
                 cash: 1000,
                 bankBalance: 0,
@@ -490,20 +500,24 @@ class AuthManager {
                 portfolio: {}
             });
 
+            // 6. 마무리
             if (role === 'student') {
-                alert('회원가입이 완료되었습니다! 로그인해 주세요.');
+                alert('학생 회원가입이 완료되었습니다! 이제 로그인을 해주세요.');
             } else {
-                alert(`관리자 가입 완료! 학급 코드가 발급되었습니다.\n코드: [${generatedClassCode}]`);
+                alert(`관리자 가입 완료!\n학급 코드는 [${generatedClassCode}] 입니다.\n학생들에게 이 코드를 알려주세요.`);
             }
+
+            // 가입 후 즉시 로그아웃 처리 (세션 꼬임 방지)
+            await auth.signOut();
             this.closeModal();
             window.location.reload();
+
         } catch (error) {
-            console.error("Signup Error:", error);
-            let msg = '회원가입 실패: ' + error.message;
-            if (error.code === 'auth/email-already-in-use') {
-                msg = role === 'student' ? '이미 존재하는 아이디입니다.' : '이미 사용 중인 이메일입니다.';
-            }
-            alert(msg);
+            console.error("회원가입 최종 에러:", error);
+            let msg = '회원가입 중 오류가 발생했습니다.';
+            if (error.code === 'auth/email-already-in-use') msg = '이미 존재하는 아이디 또는 이메일입니다.';
+            if (error.code === 'permission-denied') msg = '데이터베이스 권한이 없습니다. 보안 규칙을 확인해 주세요.';
+            alert(msg + "\n(" + error.code + ")");
         }
     }
 
