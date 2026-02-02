@@ -438,6 +438,7 @@ class EconomicSimulation {
             await this.logActivity('LOAN_TAKEN', amount, `중앙은행 대출 (${loanRate.toFixed(1)}%)`);
         } catch (err) { alert("대출 실패: " + err.message); }
     }
+}
 
 // [신설] 관리자 국고 직접 조절 기능
 window.adjustTreasury = async (mode) => {
