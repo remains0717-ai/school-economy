@@ -167,7 +167,10 @@ class AuthManager {
         const code = this.currentCode;
         if (!code) return;
 
-        if (this.adminListUnsub) return; // Already listening
+        if (this.adminListUnsub) {
+            this.adminListUnsub();
+            this.adminListUnsub = null;
+        }
 
         // [1] 학생 목록 (onSnapshot으로 실시간 연동)
         this.adminListUnsub = db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(async snap => {
@@ -179,10 +182,14 @@ class AuthManager {
             if (assetBody) assetBody.innerHTML = '';
             if (jobBody) jobBody.innerHTML = '';
 
-            for (const doc of snap.docs) {
+            // 실시간 주가 정보를 한 번만 가져오기 위해 공통 심볼 목록 추출
+            const allSymbols = new Set();
+            
+            snap.forEach(doc => {
                 const d = doc.data();
                 const uid = doc.id;
 
+                // [학생 관리 탭]
                 if (accBody) {
                     const status = d.isAuthorized ? '<span style="color:var(--primary)">승인됨</span>' : '<span style="color:var(--danger)">미승인</span>';
                     const btnText = d.isAuthorized ? "승인 취소" : "승인 하기";
@@ -190,39 +197,33 @@ class AuthManager {
                     accBody.innerHTML += `<tr><td>${d.username}</td><td>${status}</td><td><button onclick="window.toggleApproval('${uid}', ${!d.isAuthorized})" style="background:${btnColor}">${btnText}</button></td></tr>`;
                 }
 
+                // [직업 관리 탭]
+                if (jobBody) {
+                    jobBody.innerHTML += `<tr><td><input type="checkbox" class="job-checkbox" value="${uid}"></td><td>${d.nickname||d.username}</td><td><input type="text" value="${d.job||''}" class="job-input" style="width:80px"></td><td><input type="number" value="${d.salary||0}" class="salary-input" style="width:80px"></td><td><button onclick="window.updateJobInfo('${uid}', this)">저장</button></td></tr>`;
+                }
+
+                // [자산 관리 탭] 초기 로딩 (주식 제외)
                 if (assetBody) {
                     const balance = Number(d.balance || 0);
                     const bankBalance = Number(d.bankBalance || 0);
                     const debt = Number(d.debt || 0);
                     
-                    // 각 학생의 주식 총액 계산
-                    const portSnap = await db.collection('users').doc(uid).collection('portfolio').get();
-                    let stockTotal = 0;
-                    for (const pDoc of portSnap.docs) {
-                        const p = pDoc.data();
-                        const symbol = pDoc.id.replace('_', ':');
-                        const price = await this.simulation.getStockPrice(symbol);
-                        stockTotal += (price * p.count * this.simulation.exchangeRate);
-                    }
-                    
-                    const totalAssets = balance + bankBalance + stockTotal - debt;
-
-                    assetBody.innerHTML += `<tr>
+                    const rowId = `asset-row-${uid}`;
+                    assetBody.innerHTML += `<tr id="${rowId}">
                         <td><input type="checkbox" class="student-checkbox" value="${uid}"></td>
                         <td>${d.nickname||d.username}</td>
                         <td style="color:var(--primary)">₩${balance.toLocaleString()}</td>
                         <td>₩${bankBalance.toLocaleString()}</td>
-                        <td style="color:var(--secondary)">₩${Math.floor(stockTotal).toLocaleString()}</td>
+                        <td class="stock-cell" style="color:var(--secondary)">계산중...</td>
                         <td style="color:var(--danger)">₩${debt.toLocaleString()}</td>
-                        <td class="important-metric">₩${Math.floor(totalAssets).toLocaleString()}</td>
+                        <td class="total-cell important-metric">₩${(balance + bankBalance - debt).toLocaleString()}</td>
                         <td><button onclick="window.openModifyModal('${uid}','${d.username}',${balance})">수정</button></td>
                     </tr>`;
-                }
 
-                if (jobBody) {
-                    jobBody.innerHTML += `<tr><td><input type="checkbox" class="job-checkbox" value="${uid}"></td><td>${d.nickname||d.username}</td><td><input type="text" value="${d.job||''}" class="job-input" style="width:80px"></td><td><input type="number" value="${d.salary||0}" class="salary-input" style="width:80px"></td><td><button onclick="window.updateJobInfo('${uid}', this)">저장</button></td></tr>`;
+                    // 각 학생의 주식 정보 업데이트를 비동기로 실행
+                    this.updateStudentStockAsset(uid, balance, bankBalance, debt);
                 }
-            }
+            });
             
             document.querySelectorAll('.student-checkbox').forEach(cb => cb.onchange = () => this.updateSelectedCount());
             document.querySelectorAll('.job-checkbox').forEach(cb => cb.onchange = () => this.updateSelectedJobCount());
@@ -238,6 +239,29 @@ class AuthManager {
                 });
             }
         });
+    }
+
+    async updateStudentStockAsset(uid, balance, bankBalance, debt) {
+        try {
+            const portSnap = await db.collection('users').doc(uid).collection('portfolio').get();
+            let stockTotal = 0;
+            
+            for (const pDoc of portSnap.docs) {
+                const p = pDoc.data();
+                const symbol = pDoc.id.replace('_', ':');
+                const price = await this.simulation.getStockPrice(symbol);
+                stockTotal += (price * p.count * this.simulation.exchangeRate);
+            }
+
+            const totalAssets = balance + bankBalance + stockTotal - debt;
+            const row = document.getElementById(`asset-row-${uid}`);
+            if (row) {
+                row.querySelector('.stock-cell').textContent = `₩${Math.floor(stockTotal).toLocaleString()}`;
+                row.querySelector('.total-cell').textContent = `₩${Math.floor(totalAssets).toLocaleString()}`;
+            }
+        } catch (err) {
+            console.error("Stock update error:", err);
+        }
     }
 
     updateSelectedCount() {
@@ -322,6 +346,7 @@ class EconomicSimulation {
         this.tradeMode = 'buy';
         this.exchangeRate = 1350; // 고정 환율 시뮬레이션
         this.tvWidget = null;
+        this.lastStockTotal = 0;
         
         this.topStocks = [
             { symbol: 'NASDAQ:AAPL', name: '애플' }, { symbol: 'NASDAQ:TSLA', name: '테슬라' },
@@ -382,7 +407,6 @@ class EconomicSimulation {
         if (isNewUser) {
             this.loadDeposits();
             this.loadLoans();
-            this.loadTopStocks();
             this.loadPortfolio();
             this.initTradingView();
             this.setupTradeListeners();
@@ -462,27 +486,16 @@ class EconomicSimulation {
     }
 
     async loadTopStocks() {
-        const listContainer = document.getElementById('top-stocks-list');
-        if (!listContainer) return;
-        listContainer.innerHTML = '';
-
-        for (const stock of this.topStocks) {
-            const card = document.createElement('div');
-            card.className = 'inventory-item';
-            card.style.cursor = 'pointer';
-            card.onclick = () => this.selectStock(stock.symbol, stock.name);
-            card.innerHTML = `<span>${stock.name}</span><small>${stock.symbol.split(':')[1]}</small>`;
-            listContainer.appendChild(card);
-        }
+        // 인기 종목 기능 삭제됨
     }
 
     async searchStock() {
         let query = document.getElementById('stock-search-input').value.trim().toUpperCase();
         if (!query) return;
         
-        // 심볼 형식 보정 (예: AAPL -> NASDAQ:AAPL)
+        // 심볼 형식 보정
         if (!query.includes(':')) {
-            if (['BTC', 'ETH', 'SOL'].includes(query)) query = `BINANCE:${query}USDT`;
+            if (['BTC', 'ETH', 'SOL', 'XRP'].includes(query)) query = `BINANCE:${query}USDT`;
             else query = `NASDAQ:${query}`;
         }
 
@@ -506,12 +519,15 @@ class EconomicSimulation {
     }
 
     async getStockPrice(symbol) {
-        // 실제 API 연동이 어려운 경우 시뮬레이션 가격을 사용하되, 
-        // TradingView 위젯이 실시간 가격을 보여주므로 시뮬레이션 범위를 좁힘
-        const basePrices = { AAPL: 180, TSLA: 200, NVDA: 700, MSFT: 400, AMZN: 170, GOOGL: 140, META: 450, NFLX: 600, BTCUSDT: 50000, DIS: 110 };
+        // 2026-02-02 기준 시장가 근사치 (시연용)
+        const basePrices = { 
+            AAPL: 245.50, TSLA: 412.30, NVDA: 135.20, MSFT: 425.10, 
+            AMZN: 195.80, GOOGL: 188.40, META: 512.60, NFLX: 625.00, 
+            BTCUSDT: 102500.00, DIS: 115.40, SOLUSDT: 245.00, ETHUSDT: 3850.00 
+        };
         const ticker = symbol.split(':')[1].replace('USDT', '');
-        const base = basePrices[ticker] || 100;
-        return Math.floor((base + (Math.random() - 0.5) * 2) * 100) / 100;
+        const base = basePrices[ticker] || 150.00;
+        return Math.floor((base + (Math.random() - 0.5) * 0.5) * 100) / 100;
     }
 
     updateTradeSummary() {
