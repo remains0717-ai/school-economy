@@ -45,6 +45,15 @@ class AuthManager {
             this.updateSelectedJobCount();
         });
 
+        document.getElementById('selectAllDeposits')?.addEventListener('change', (e) => {
+            document.querySelectorAll('.deposit-checkbox').forEach(cb => cb.checked = e.target.checked);
+        });
+
+        // 주식 관련
+        document.getElementById('search-stock-btn')?.addEventListener('click', () => this.simulation.searchStock());
+        document.getElementById('buy-action-btn')?.addEventListener('click', () => this.simulation.executeTrade('buy'));
+        document.getElementById('sell-action-btn')?.addEventListener('click', () => this.simulation.executeTrade('sell'));
+
         window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.style.display = 'none'; };
     }
 
@@ -276,7 +285,17 @@ class AuthManager {
 }
 
 class EconomicSimulation {
-    constructor() { this.user = null; }
+    constructor() { 
+        this.user = null; 
+        this.currentStock = null;
+        this.topStocks = [
+            { symbol: 'AAPL', name: '애플' }, { symbol: 'TSLA', name: '테슬라' },
+            { symbol: 'NVDA', name: '엔비디아' }, { symbol: 'MSFT', name: '마이크로소프트' },
+            { symbol: 'AMZN', name: '아마존' }, { symbol: 'GOOGL', name: '구글' },
+            { symbol: 'META', name: '메타' }, { symbol: 'NFLX', name: '넷플릭스' },
+            { symbol: 'BTC-USD', name: '비트코인' }, { symbol: 'DIS', name: '디즈니' }
+        ];
+    }
     sync(user) { 
         this.user = user; 
         const setT = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
@@ -291,6 +310,126 @@ class EconomicSimulation {
         setT('loan-credit-grade', `${grade}등급`);
         setT('loan-limit', ((11-grade)*5000).toLocaleString());
         this.loadDeposits();
+        this.loadTopStocks();
+        if (this.currentStock) this.selectStock(this.currentStock.symbol, this.currentStock.name);
+    }
+
+    async loadTopStocks() {
+        const listContainer = document.getElementById('top-stocks-list');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+
+        for (const stock of this.topStocks) {
+            const price = await this.getStockPrice(stock.symbol);
+            const card = document.createElement('div');
+            card.className = 'asset-status';
+            card.style.cursor = 'pointer';
+            card.style.border = '1px solid #333';
+            card.onclick = () => this.selectStock(stock.symbol, stock.name);
+            card.innerHTML = `
+                <strong style="color:var(--primary)">${stock.name}</strong>
+                <p style="margin:5px 0; font-size:0.9rem;">$${price.toLocaleString()}</p>
+                <small style="color:#888;">${stock.symbol}</small>
+            `;
+            listContainer.appendChild(card);
+        }
+    }
+
+    async searchStock() {
+        const query = document.getElementById('stock-search-input').value.trim();
+        if (!query) return;
+        
+        const resultsBox = document.getElementById('stock-search-results');
+        resultsBox.innerHTML = '<p style="padding:10px; color:#888;">검색 중...</p>';
+        resultsBox.classList.remove('hidden');
+
+        try {
+            // Yahoo Finance Search API (CORS 프록시 사용 권장되나 여기선 시연용으로 구성)
+            // 실제 구현 시 백엔드 프록시나 공식 API 키 사용 필요
+            // 여기서는 검색어와 매칭되는 주요 종목 필터링으로 대체하여 안정성 확보
+            const matches = this.topStocks.filter(s => s.name.includes(query) || s.symbol.includes(query.toUpperCase()));
+            
+            if (matches.length === 0) {
+                resultsBox.innerHTML = '<p style="padding:10px; color:#888;">결과가 없습니다.</p>';
+            } else {
+                resultsBox.innerHTML = '';
+                matches.forEach(s => {
+                    const div = document.createElement('div');
+                    div.style.padding = '10px';
+                    div.style.cursor = 'pointer';
+                    div.style.borderBottom = '1px solid #333';
+                    div.innerHTML = `<strong>${s.name}</strong> <small style="color:#888;">(${s.symbol})</small>`;
+                    div.onclick = () => {
+                        this.selectStock(s.symbol, s.name);
+                        resultsBox.classList.add('hidden');
+                    };
+                    resultsBox.appendChild(div);
+                });
+            }
+        } catch (err) { resultsBox.innerHTML = '<p style="padding:10px; color:var(--danger)">검색 실패</p>'; }
+    }
+
+    async selectStock(symbol, name) {
+        const price = await this.getStockPrice(symbol);
+        this.currentStock = { symbol, name, price };
+        
+        document.getElementById('stock-detail-panel').classList.remove('hidden');
+        document.getElementById('selected-stock-name').textContent = name;
+        document.getElementById('selected-stock-symbol').textContent = symbol;
+        document.getElementById('current-price-val').textContent = `$${price.toLocaleString()}`;
+        
+        // 보유 현황 로드
+        const portSnap = await db.collection('users').doc(this.user.uid).collection('portfolio').doc(symbol).get();
+        const myData = portSnap.exists ? portSnap.data() : { count: 0, avgPrice: 0 };
+        document.getElementById('my-stock-count').textContent = myData.count;
+        document.getElementById('my-avg-price').textContent = `$${(myData.avgPrice || 0).toLocaleString()}`;
+    }
+
+    async getStockPrice(symbol) {
+        // 실제 운영 시 Finnhub, Alpha Vantage 등 사용
+        // 여기서는 시연을 위해 고정가에 약간의 변동성을 준 시뮬레이션 가격 반환
+        const basePrices = { AAPL: 180, TSLA: 200, NVDA: 700, MSFT: 400, AMZN: 170, GOOGL: 140, META: 450, NFLX: 600, 'BTC-USD': 50000, DIS: 110 };
+        const base = basePrices[symbol] || 100;
+        const volatility = (Math.random() - 0.5) * (base * 0.02); // 1% 변동성
+        return Math.floor((base + volatility) * 100) / 100;
+    }
+
+    async executeTrade(type) {
+        if (!this.currentStock) return alert("종목을 먼저 선택하세요.");
+        const amount = parseInt(document.getElementById('stock-trade-amount').value);
+        if (isNaN(amount) || amount <= 0) return alert("수량을 입력하세요.");
+
+        const symbol = this.currentStock.symbol;
+        const price = this.currentStock.price;
+        const totalCost = price * amount * 1300; // 환율 시뮬레이션 (1300원)
+        
+        const userRef = db.collection('users').doc(this.user.uid);
+        const portRef = userRef.collection('portfolio').doc(symbol);
+
+        try {
+            await db.runTransaction(async (t) => {
+                const uDoc = await t.get(userRef);
+                const pDoc = await t.get(portRef);
+                const uData = uDoc.data();
+                const pData = pDoc.exists ? pDoc.data() : { count: 0, avgPrice: 0 };
+
+                if (type === 'buy') {
+                    if (uData.balance < totalCost) throw new Error("잔액이 부족합니다.");
+                    const newCount = pData.count + amount;
+                    const newAvg = ((pData.avgPrice * pData.count) + (price * amount)) / newCount;
+                    t.update(userRef, { balance: uData.balance - totalCost });
+                    t.set(portRef, { count: newCount, avgPrice: newAvg });
+                } else {
+                    if (pData.count < amount) throw new Error("보유 수량이 부족합니다.");
+                    t.update(userRef, { balance: uData.balance + totalCost });
+                    const newCount = pData.count - amount;
+                    if (newCount === 0) t.delete(portRef);
+                    else t.update(portRef, { count: newCount });
+                }
+            });
+            alert(`${type === 'buy' ? '매수' : '매도'} 완료!`);
+            this.sync(this.user);
+        } catch (err) { alert(err.message); }
     }
 
     async deposit() {
@@ -312,25 +451,47 @@ class EconomicSimulation {
     }
 
     async withdraw() {
-        const snap = await db.collection('users').doc(this.user.uid).collection('deposits').where('status','==','active').get();
-        if (snap.empty) return alert("만기된 예금이 없습니다.");
-        
+        const checkboxes = document.querySelectorAll('.deposit-checkbox:checked');
+        if (checkboxes.length === 0) return alert("해지/수령할 항목을 선택해 주세요.");
+
         const batch = db.batch();
-        let total = 0;
-        let count = 0;
-        snap.forEach(doc => {
-            const d = doc.data();
-            if (d.maturityAt.toDate() <= new Date()) {
-                const interest = Math.floor(d.amount * (d.rate/100));
-                total += (d.amount + interest);
-                batch.update(doc.ref, { status: 'completed' });
-                count++;
-            }
-        });
-        if (count === 0) return alert("아직 만기 전입니다.");
-        batch.update(db.collection('users').doc(this.user.uid), { balance: firebase.firestore.FieldValue.increment(total), bankBalance: firebase.firestore.FieldValue.increment(-(total-Math.floor(total*0.1))) }); // 단순화
-        await batch.commit();
-        alert("수령 완료!");
+        let totalReceived = 0;
+        let totalPrincipalOnly = 0;
+        const now = new Date();
+
+        for (const cb of checkboxes) {
+            const docId = cb.value;
+            const docRef = db.collection('users').doc(this.user.uid).collection('deposits').doc(docId);
+            const dDoc = await docRef.get();
+            const d = dDoc.data();
+
+            if (d.status !== 'active') continue;
+
+            const isMatured = d.maturityAt.toDate() <= now;
+            const interest = isMatured ? Math.floor(d.amount * (d.rate / 100)) : 0;
+            const receiveAmount = d.amount + interest;
+
+            totalReceived += receiveAmount;
+            totalPrincipalOnly += d.amount;
+
+            batch.update(docRef, { 
+                status: isMatured ? 'completed' : 'cancelled',
+                cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        if (totalPrincipalOnly === 0) return alert("처리할 수 있는 항목이 없습니다.");
+
+        try {
+            const userRef = db.collection('users').doc(this.user.uid);
+            batch.update(userRef, { 
+                balance: firebase.firestore.FieldValue.increment(totalReceived),
+                bankBalance: firebase.firestore.FieldValue.increment(-totalPrincipalOnly)
+            });
+            
+            await batch.commit();
+            alert(`선택한 항목의 처리가 완료되었습니다.\n총 수령액: ₩${totalReceived.toLocaleString()}`);
+        } catch (err) { alert("오류: " + err.message); }
     }
 
     loadDeposits() {
@@ -340,7 +501,29 @@ class EconomicSimulation {
                 body.innerHTML = '';
                 snap.forEach(doc => {
                     const d = doc.data();
-                    body.innerHTML += `<tr><td>₩${d.amount.toLocaleString()}</td><td>${d.rate}%</td><td>₩${Math.floor(d.amount*(d.rate/100)).toLocaleString()}</td><td>${d.maturityAt.toDate().toLocaleString()}</td><td>${d.status}</td></tr>`;
+                    const now = new Date();
+                    const isMatured = d.maturityAt.toDate() <= now;
+                    const interest = Math.floor(d.amount * (d.rate / 100));
+                    
+                    let statusText = d.status;
+                    if (d.status === 'active') {
+                        statusText = isMatured ? '<span style="color:var(--primary)">만기! (수령가능)</span>' : '거치중';
+                    } else if (d.status === 'completed') {
+                        statusText = '수령완료';
+                    } else if (d.status === 'cancelled') {
+                        statusText = '<span style="color:var(--danger)">중도해지</span>';
+                    }
+
+                    const checkbox = d.status === 'active' ? `<input type="checkbox" class="deposit-checkbox" value="${doc.id}">` : '';
+
+                    body.innerHTML += `<tr>
+                        <td>${checkbox}</td>
+                        <td>₩${d.amount.toLocaleString()}</td>
+                        <td>${d.rate}%</td>
+                        <td>₩${interest.toLocaleString()}</td>
+                        <td>${d.maturityAt.toDate().toLocaleString()}</td>
+                        <td>${statusText}</td>
+                    </tr>`;
                 });
             }
         });
@@ -358,6 +541,40 @@ class EconomicSimulation {
 }
 
 // [Global Admin Functions]
+window.adjustTreasury = async (mode) => {
+    const input = document.getElementById('adj-treasury-amount');
+    const amount = parseInt(input.value);
+    if (isNaN(amount)) return alert("올바른 금액을 입력하세요.");
+
+    const code = (window.userState.currentUser.classCode || window.userState.currentUser.adminCode).trim().toUpperCase();
+    const current = window.userState.classData.treasury || 0;
+    const next = mode === 'set' ? amount : current + amount;
+
+    if (!confirm(`국고 잔액을 ₩${next.toLocaleString()}으로 조절하시겠습니까?`)) return;
+    try {
+        await db.collection('classes').doc(code).update({ treasury: next });
+        alert("국고가 조정되었습니다.");
+        input.value = '';
+    } catch (err) { alert(err.message); }
+};
+
+window.adjustDebt = async (mode) => {
+    const input = document.getElementById('adj-debt-amount');
+    const amount = parseInt(input.value);
+    if (isNaN(amount)) return alert("올바른 금액을 입력하세요.");
+
+    const code = (window.userState.currentUser.classCode || window.userState.currentUser.adminCode).trim().toUpperCase();
+    const current = window.userState.classData.debt || 0;
+    const next = mode === 'set' ? Math.max(0, amount) : Math.max(0, current + amount);
+
+    if (!confirm(`미상환 국채를 ₩${next.toLocaleString()}으로 조절하시겠습니까?`)) return;
+    try {
+        await db.collection('classes').doc(code).update({ debt: next });
+        alert("국채가 조정되었습니다.");
+        input.value = '';
+    } catch (err) { alert(err.message); }
+};
+
 window.updateBankPolicy = async () => {
     const br = parseFloat(document.getElementById('policy-base-rate').value);
     const mh = parseInt(document.getElementById('policy-maturity-hours').value);

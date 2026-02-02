@@ -202,12 +202,12 @@
                         <input type="number" id="bank-amount" placeholder="입금할 금액">
                         <div class="button-group" style="display:flex; gap:10px; margin-top:10px;">
                             <button id="deposit-btn" class="auth-btn" style="flex:1; background:var(--primary); color:#1a1a1a;">입금하기 (저축)</button>
-                            <button id="withdraw-btn" class="auth-btn" style="flex:1;">만기금 수령</button>
+                            <button id="withdraw-btn" class="auth-btn" style="flex:1;">선택 항목 해지/수령</button>
                         </div>
                     </div>
                 </div>
                 <h3>나의 예/적금 목록</h3>
-                <table><thead><tr><th>입금액</th><th>적용금리</th><th>예상 이자</th><th>만기 일시</th><th>상태</th></tr></thead><tbody id="deposit-list-body"></tbody></table>
+                <table><thead><tr><th><input type="checkbox" id="selectAllDeposits"></th><th>입금액</th><th>적용금리</th><th>예상 이자</th><th>만기 일시</th><th>상태</th></tr></thead><tbody id="deposit-list-body"></tbody></table>
             </div>
 
             <!-- [4] 대출 서비스 -->
@@ -226,12 +226,44 @@
             <!-- [5] 모의 주식 투자 -->
             <div id="stock-trading-view" class="view">
                 <h2>모의 주식 투자</h2>
-                <div class="stock-search" style="display:flex; gap:10px;"><input type="text" id="stock-symbol" placeholder="AAPL"><button id="load-stock-btn" class="auth-btn">차트 로드</button></div>
-                <div id="stock-chart-container" style="height:400px; background:#1a1a1a; margin:20px 0; border-radius:10px; border:1px solid #333;"></div>
-                <div class="trading-panel" style="background:#1e1e1e; padding:20px; border-radius:10px;">
-                    <h3 id="display-stock-name">종목을 선택하세요</h3>
-                    <p>현재가: <span id="current-stock-price" class="important-metric">0</span></p>
-                    <div class="trade-controls" style="display:flex; gap:10px; margin-top:15px;"><input type="number" id="trade-amount" placeholder="수량"><button id="buy-stock-btn" class="auth-btn" style="background:#f44336; color:white; border:none;">매수</button><button id="sell-stock-btn" class="auth-btn" style="background:#2196f3; color:white; border:none;">매도</button></div>
+                
+                <div class="asset-status" style="margin-bottom:20px;">
+                    <h3>🔍 종목 검색</h3>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="stock-search-input" placeholder="회사명 또는 티커 입력 (예: 삼성전자, AAPL)" style="flex:1">
+                        <button id="search-stock-btn" class="auth-btn">검색</button>
+                    </div>
+                    <div id="stock-search-results" class="search-results-box hidden" style="background:#222; margin-top:10px; border-radius:5px; max-height:200px; overflow-y:auto; border:1px solid #444;"></div>
+                </div>
+
+                <div class="asset-status">
+                    <h3>🔥 실시간 인기 종목 (TOP 10)</h3>
+                    <div id="top-stocks-list" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:15px; margin-top:15px;">
+                        <p style="color:#888;">데이터를 불러오는 중...</p>
+                    </div>
+                </div>
+
+                <div id="stock-detail-panel" class="trading-panel hidden" style="background:#1e1e1e; padding:20px; border-radius:10px; margin-top:20px; border:1px solid var(--primary);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 id="selected-stock-name" style="margin:0;">종목명</h3>
+                        <span id="selected-stock-symbol" style="color:#888; font-weight:bold;">SYMBOL</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:15px;">
+                        <div>
+                            <p style="margin:5px 0;">현재가: <span id="current-price-val" class="important-metric" style="color:var(--primary)">0</span></p>
+                            <p style="margin:5px 0;">변동폭: <span id="price-change-val">0</span></p>
+                        </div>
+                        <div style="text-align:right">
+                            <p style="margin:5px 0;">보유 수량: <span id="my-stock-count" style="color:#ffeb3b">0</span>주</p>
+                            <p style="margin:5px 0;">평균 단가: <span id="my-avg-price">0</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="trade-controls" style="display:flex; gap:10px; margin-top:20px;">
+                        <input type="number" id="stock-trade-amount" placeholder="수량" style="flex:1">
+                        <button id="buy-action-btn" class="auth-btn" style="background:#f44336; color:white; flex:1; border:none;">매수</button>
+                        <button id="sell-action-btn" class="auth-btn" style="background:#2196f3; color:white; flex:1; border:none;">매도</button>
+                    </div>
                 </div>
             </div>
 
@@ -328,14 +360,27 @@
             <div id="treasury-view" class="view">
                 <h2>학급 국고 및 재정 현황</h2>
                 
-                <!-- [관리자 전용] 국고 조절 섹션 -->
+                <!-- [관리자 전용] 국고 및 국채 조절 섹션 -->
                 <div id="admin-treasury-controls" class="asset-status hidden" style="border-style: dashed; margin-bottom: 30px;">
-                    <h3>💰 국고 자금 조절 (관리자)</h3>
-                    <p style="font-size: 0.9rem; color: #888;">초기 자금을 설정하거나 국고 예산을 직접 조정할 수 있습니다.</p>
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
-                        <input type="number" id="adj-treasury-amount" placeholder="조정할 금액 (₩)">
-                        <button onclick="window.adjustTreasury('set')" class="auth-btn" style="background: var(--primary); color: #1a1a1a;">설정하기</button>
-                        <button onclick="window.adjustTreasury('add')" class="auth-btn">추가하기</button>
+                    <h3>💰 국고 및 국채 직접 조절 (관리자 전용)</h3>
+                    <p style="font-size: 0.9rem; color: #888;">초기 설정 또는 오류 수정을 위해 잔액을 직접 조정할 수 있습니다.</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                        <div>
+                            <label>국고 잔액 조절 (₩)</label>
+                            <input type="number" id="adj-treasury-amount" placeholder="금액 입력">
+                            <div style="display:flex; gap:5px; margin-top:5px;">
+                                <button onclick="window.adjustTreasury('set')" class="auth-btn" style="flex:1; background:var(--primary); color:#1a1a1a; font-size:0.8rem;">설정</button>
+                                <button onclick="window.adjustTreasury('add')" class="auth-btn" style="flex:1; font-size:0.8rem;">추가</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label>미상환 국채 조절 (₩)</label>
+                            <input type="number" id="adj-debt-amount" placeholder="금액 입력">
+                            <div style="display:flex; gap:5px; margin-top:5px;">
+                                <button onclick="window.adjustDebt('set')" class="auth-btn" style="flex:1; background:var(--danger); font-size:0.8rem;">설정</button>
+                                <button onclick="window.adjustDebt('add')" class="auth-btn" style="flex:1; font-size:0.8rem;">추가</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
