@@ -241,6 +241,7 @@ class AuthManager {
             const el = document.getElementById(id); 
             if (el && document.activeElement !== el) el.value = val; 
         };
+        const setC = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
 
         const br = data.baseRate !== undefined ? data.baseRate : 0;
         const mh = data.maturityHours || 24;
@@ -267,6 +268,10 @@ class AuthManager {
         setT('student-deposit-rate', `${br}%`);
         setT('student-maturity-hours', `${mh}시간`);
         setT('display-loan-rate', `${(br + ls).toFixed(1)}%`);
+
+        // 상점 설정 반영
+        setC('config-refund-enabled', data.shopConfig?.refundEnabled || false);
+        setV('config-refund-days', data.shopConfig?.refundDays || 7);
 
         if (data.news) {
             document.getElementById('news-ticker-container')?.classList.remove('hidden');
@@ -549,14 +554,30 @@ class EconomicSimulation {
             if (!grid) return;
             grid.innerHTML = '';
 
+            // 아이템 그룹화 (이름 기준)
+            const groups = {};
             snap.forEach(doc => {
                 const item = doc.data();
+                if (!groups[item.itemName]) {
+                    groups[item.itemName] = { ...item, count: 1, ids: [doc.id], latestDate: item.timestamp?.toDate() };
+                } else {
+                    groups[item.itemName].count++;
+                    groups[item.itemName].ids.push(doc.id);
+                }
+            });
+
+            Object.values(groups).forEach(group => {
                 const div = document.createElement('div');
                 div.className = 'inventory-item';
+                div.style.cursor = 'pointer';
                 div.innerHTML = `
-                    <span>${item.itemName}</span>
-                    <small style="color:#666;">₩ ${item.price.toLocaleString()}</small>
+                    <div style="position:relative;">
+                        <span style="font-size:1.1rem;">${group.itemName}</span>
+                        ${group.count > 1 ? `<span style="position:absolute; top:-5px; right:-15px; background:var(--primary); color:#1a1a1a; padding:2px 6px; border-radius:10px; font-size:0.7rem; font-weight:bold;">x${group.count}</span>` : ''}
+                    </div>
+                    <small style="color:#666; display:block; margin-top:5px;">평균 ₩${group.price.toLocaleString()}</small>
                 `;
+                div.onclick = () => window.openItemDetail(group);
                 grid.appendChild(div);
             });
 
@@ -564,6 +585,30 @@ class EconomicSimulation {
                 grid.innerHTML = '<p style="color:#666; grid-column: 1/-1;">보유 중인 아이템이 없습니다.</p>';
             }
         });
+    }
+
+    async refundItem(itemId, itemName, price) {
+        const config = window.userState.classData?.shopConfig || {};
+        if (!config.refundEnabled) return alert("현재 학급 상점에서 환불 기능이 비활성화되어 있습니다.");
+
+        if (!confirm(`[${itemName}]을 환불하시겠습니까?\n₩${price.toLocaleString()}이 즉시 입금됩니다.`)) return;
+
+        try {
+            const userRef = db.collection('users').doc(this.user.uid);
+            const invRef = userRef.collection('inventory').doc(itemId);
+
+            await db.runTransaction(async (t) => {
+                const iDoc = await t.get(invRef);
+                if (!iDoc.exists) throw new Error("이미 처리된 아이템입니다.");
+                
+                t.update(userRef, { balance: firebase.firestore.FieldValue.increment(price) });
+                t.delete(invRef);
+            });
+
+            alert("환불이 완료되었습니다.");
+            document.getElementById('item-detail-modal').style.display = 'none';
+            logActivity('shop', `[${itemName}] 환불 (₩${price.toLocaleString()} 입금)`);
+        } catch (err) { alert("환불 실패: " + err.message); }
     }
 
     loadPortfolio() {
@@ -784,33 +829,54 @@ class EconomicSimulation {
         } catch (err) { alert(err.message); }
     }
 
-    async buyItem(itemId, itemName, price, currentStock) {
-        if (this.user.balance < price) return alert(`현금이 부족합니다!\n(필요: ₩${price.toLocaleString()} / 현재: ₩${this.user.balance.toLocaleString()})`);
-        if (currentStock <= 0) return alert("재고가 없습니다.");
+    async buyItem(itemId, itemName, price, currentStock, dailyLimit = 0, quantity = 1) {
+        const totalCost = price * quantity;
+        if (this.user.balance < totalCost) return alert(`현금이 부족합니다!\n(필요: ₩${totalCost.toLocaleString()} / 현재: ₩${this.user.balance.toLocaleString()})`);
+        if (currentStock < quantity) return alert(`재고가 부족합니다. (남은 재고: ${currentStock}개)`);
 
-        if (!confirm(`[${itemName}]을 ₩${price.toLocaleString()}에 구매하시겠습니까?`)) return;
+        // 일일 구매 제한 체크 (모달에서도 했지만 보안을 위해 한번 더 체크)
+        if (dailyLimit > 0) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const pSnap = await db.collection('users').doc(this.user.uid)
+                .collection('inventory')
+                .where('itemName', '==', itemName)
+                .where('timestamp', '>=', firebase.firestore.Timestamp.fromDate(today))
+                .get();
+            
+            if (pSnap.size + quantity > dailyLimit) {
+                return alert(`일일 구매 제한을 초과했습니다. (오늘 이미 ${pSnap.size}개 구매 / 남은 가능 수량: ${dailyLimit - pSnap.size}개)`);
+            }
+        }
+
+        if (!confirm(`[${itemName}] ${quantity}개를 총 ₩${totalCost.toLocaleString()}에 구매하시겠습니까?`)) return;
 
         try {
             const userRef = db.collection('users').doc(this.user.uid);
             const itemRef = db.collection('items').doc(itemId);
-            const invRef = userRef.collection('inventory').doc();
 
             await db.runTransaction(async (t) => {
                 const iDoc = await t.get(itemRef);
                 const iData = iDoc.data();
                 
-                if (iData.stock <= 0) throw new Error("방금 물건이 품절되었습니다.");
+                if (iData.stock < quantity) throw new Error("방금 물건이 품절되었거나 재고가 부족해졌습니다.");
 
-                t.update(userRef, { balance: firebase.firestore.FieldValue.increment(-price) });
-                t.update(itemRef, { stock: firebase.firestore.FieldValue.increment(-1) });
-                t.set(invRef, {
-                    itemName,
-                    price,
-                    timestamp: firebase.firestore.Timestamp.now()
-                });
+                t.update(userRef, { balance: firebase.firestore.FieldValue.increment(-totalCost) });
+                t.update(itemRef, { stock: firebase.firestore.FieldValue.increment(-quantity) });
+                
+                // 수량만큼 인벤토리 아이템 생성
+                for (let i = 0; i < quantity; i++) {
+                    const invRef = userRef.collection('inventory').doc();
+                    t.set(invRef, {
+                        itemName,
+                        price,
+                        timestamp: firebase.firestore.Timestamp.now()
+                    });
+                }
             });
-            alert("구매가 완료되었습니다! 가방에서 확인하세요.");
-            logActivity('shop', `[${itemName}] 구매 (₩${price.toLocaleString()})`);
+            alert(`${quantity}개의 물품 구매가 완료되었습니다! 가방에서 확인하세요.`);
+            logActivity('shop', `[${itemName}] ${quantity}개 구매 (총 ₩${totalCost.toLocaleString()})`);
         } catch (err) { alert("구매 실패: " + err.message); }
     }
 
@@ -1035,6 +1101,7 @@ window.addShopItem = async () => {
     const name = document.getElementById('new-item-name').value.trim();
     const price = parseInt(document.getElementById('new-item-price').value);
     const stock = parseInt(document.getElementById('new-item-stock').value);
+    const limit = parseInt(document.getElementById('new-item-limit').value) || 0;
 
     if (!category || !name || isNaN(price) || isNaN(stock)) return alert("모든 정보를 올바르게 입력하세요.");
 
@@ -1047,6 +1114,7 @@ window.addShopItem = async () => {
             name,
             price,
             stock,
+            dailyLimit: limit,
             createdAt: firebase.firestore.Timestamp.now()
         });
         alert("물품이 등록되었습니다.");
@@ -1054,7 +1122,43 @@ window.addShopItem = async () => {
         document.getElementById('new-item-name').value = '';
         document.getElementById('new-item-price').value = '';
         document.getElementById('new-item-stock').value = '';
+        document.getElementById('new-item-limit').value = '0';
     } catch (err) { alert("등록 실패: " + err.message); }
+};
+
+window.openEditShopModal = async (itemId) => {
+    try {
+        const doc = await db.collection('items').doc(itemId).get();
+        if (!doc.exists) return;
+        const d = doc.data();
+        document.getElementById('edit-item-id').value = itemId;
+        document.getElementById('edit-item-category').value = d.category || '';
+        document.getElementById('edit-item-name').value = d.name || '';
+        document.getElementById('edit-item-price').value = d.price || 0;
+        document.getElementById('edit-item-stock').value = d.stock || 0;
+        document.getElementById('edit-item-limit').value = d.dailyLimit || 0;
+        document.getElementById('edit-shop-modal').style.display = 'block';
+    } catch (err) { alert("불러오기 실패"); }
+};
+
+window.confirmEditShopItem = async () => {
+    const id = document.getElementById('edit-item-id').value;
+    const category = document.getElementById('edit-item-category').value.trim();
+    const name = document.getElementById('edit-item-name').value.trim();
+    const price = parseInt(document.getElementById('edit-item-price').value);
+    const stock = parseInt(document.getElementById('edit-item-stock').value);
+    const limit = parseInt(document.getElementById('edit-item-limit').value) || 0;
+
+    if (!id || !name || isNaN(price)) return alert("필수 정보를 입력하세요.");
+
+    try {
+        await db.collection('items').doc(id).update({
+            category, name, price, stock, dailyLimit: limit
+        });
+        alert("수정되었습니다.");
+        document.getElementById('edit-shop-modal').style.display = 'none';
+        logActivity('admin', `상점 물품 수정: [${name}]`);
+    } catch (err) { alert("수정 실패: " + err.message); }
 };
 
 window.deleteShopItem = async (itemId) => {
@@ -1078,12 +1182,17 @@ function loadAdminShopItems(code) {
         items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
         items.forEach(item => {
+            const limitText = item.dailyLimit > 0 ? `${item.dailyLimit}개` : '무제한';
             body.innerHTML += `<tr>
                 <td>${item.category || '기타'}</td>
                 <td><strong>${item.name}</strong></td>
                 <td>₩${item.price.toLocaleString()}</td>
                 <td>${item.stock} 개</td>
-                <td><button onclick="window.deleteShopItem('${item.id}')" style="background:var(--danger); font-size:0.8rem;">삭제</button></td>
+                <td>${limitText}</td>
+                <td>
+                    <button onclick="window.openEditShopModal('${item.id}')" style="background:var(--secondary); color:#1a1a1a; font-size:0.8rem; margin-right:5px;">수정</button>
+                    <button onclick="window.deleteShopItem('${item.id}')" style="background:var(--danger); font-size:0.8rem;">삭제</button>
+                </td>
             </tr>`;
         });
     });
@@ -1100,6 +1209,7 @@ function loadStudentShop(code) {
         items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
         items.forEach(item => {
+            const limitInfo = item.dailyLimit > 0 ? `<p style="font-size:0.8rem; color:#aaa; margin-top:5px;">1인당 일일 ${item.dailyLimit}개 제한</p>` : '';
             const card = document.createElement('div');
             card.className = 'item-card';
             card.innerHTML = `
@@ -1109,7 +1219,8 @@ function loadStudentShop(code) {
                 <p style="font-size:0.9rem; color:${item.stock > 0 ? '#00ffdd' : 'var(--danger)'};">
                     재고: ${item.stock > 0 ? item.stock + '개' : '품절'}
                 </p>
-                <button onclick="window.simulation.buyItem('${item.id}', '${item.name}', ${item.price}, ${item.stock})" 
+                ${limitInfo}
+                <button onclick="window.openPurchaseModal('${item.id}', '${item.name}', ${item.price}, ${item.stock}, ${item.dailyLimit || 0})" 
                         class="submit-btn" 
                         ${item.stock <= 0 ? 'disabled style="background:#444;"' : ''}>
                     ${item.stock > 0 ? '구매하기' : '품절'}
@@ -1123,6 +1234,60 @@ function loadStudentShop(code) {
         }
     });
 }
+
+window.openPurchaseModal = async (itemId, itemName, price, stock, dailyLimit) => {
+    const modal = document.getElementById('purchase-modal');
+    const nameEl = document.getElementById('buy-item-name');
+    const priceUnitEl = document.getElementById('buy-item-price-unit');
+    const qtyInput = document.getElementById('buy-quantity');
+    const limitInfoEl = document.getElementById('buy-limit-info');
+    const confirmBtn = document.getElementById('confirm-purchase-btn');
+
+    nameEl.textContent = itemName;
+    priceUnitEl.textContent = `단가: ₩ ${price.toLocaleString()}`;
+    qtyInput.value = 1;
+    
+    let remaining = dailyLimit || 999;
+    if (dailyLimit > 0) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const pSnap = await db.collection('users').doc(window.userState.currentUser.uid).collection('inventory')
+            .where('itemName', '==', itemName)
+            .where('timestamp', '>=', firebase.firestore.Timestamp.fromDate(today))
+            .get();
+        remaining = Math.max(0, dailyLimit - pSnap.size);
+        limitInfoEl.textContent = `오늘 구매 가능 수량: ${remaining}개 / ${dailyLimit}개`;
+    } else {
+        limitInfoEl.textContent = "일일 구매 제한이 없는 상품입니다.";
+    }
+
+    const updatePrice = () => {
+        let val = parseInt(qtyInput.value) || 1;
+        if (val < 1) val = 1;
+        if (val > stock) val = stock;
+        if (val > remaining) val = remaining;
+        qtyInput.value = val;
+        document.getElementById('buy-total-price').textContent = `₩ ${(val * price).toLocaleString()}`;
+    };
+
+    window.adjustBuyQty = (diff) => {
+        qtyInput.value = (parseInt(qtyInput.value) || 1) + diff;
+        updatePrice();
+    };
+
+    qtyInput.oninput = updatePrice;
+    updatePrice();
+
+    confirmBtn.onclick = () => {
+        const qty = parseInt(qtyInput.value);
+        if (qty > 0) {
+            window.simulation.buyItem(itemId, itemName, price, stock, dailyLimit, qty);
+            modal.style.display = 'none';
+        }
+    };
+
+    modal.style.display = 'block';
+};
 
 window.issueCurrency = async () => {
     const input = document.getElementById('issue-amount');
@@ -1344,6 +1509,55 @@ window.sendBulkItems = async () => {
         await batch.commit();
         alert("선물 완료!");
     } catch (err) { alert(err.message); }
+};
+
+window.saveShopSettings = async () => {
+    const refundEnabled = document.getElementById('config-refund-enabled').checked;
+    const refundDays = parseInt(document.getElementById('config-refund-days').value) || 0;
+    const code = (window.userState.currentUser.classCode || window.userState.currentUser.adminCode).trim().toUpperCase();
+
+    try {
+        await db.collection('classes').doc(code).update({
+            shopConfig: { refundEnabled, refundDays }
+        });
+        alert("상점 설정이 저장되었습니다.");
+    } catch (err) { alert("저장 실패: " + err.message); }
+};
+
+window.openItemDetail = (group) => {
+    const modal = document.getElementById('item-detail-modal');
+    const body = document.getElementById('item-detail-body');
+    const config = window.userState.classData?.shopConfig || {};
+    
+    const now = new Date();
+    const purchaseDate = group.latestDate;
+    const diffDays = purchaseDate ? Math.floor((now - purchaseDate) / (1000 * 60 * 60 * 24)) : 999;
+    const canRefund = config.refundEnabled && diffDays <= config.refundDays;
+
+    let refundHtml = '';
+    if (config.refundEnabled) {
+        if (canRefund) {
+            refundHtml = `
+                <div style="margin-top:20px; padding:15px; border:1px solid var(--danger); border-radius:10px;">
+                    <p style="color:var(--danger); font-size:0.9rem;">환불 가능 (${config.refundDays}일 이내)</p>
+                    <button onclick="window.simulation.refundItem('${group.ids[0]}', '${group.itemName}', ${group.price})" 
+                            class="submit-btn" style="background:var(--danger); color:white; margin-top:10px;">환불하기 (1개)</button>
+                </div>
+            `;
+        } else {
+            refundHtml = `<p style="color:#666; font-size:0.85rem; margin-top:20px;">환불 기간이 지났습니다. (구매 후 ${diffDays}일 경과)</p>`;
+        }
+    } else {
+        refundHtml = `<p style="color:#666; font-size:0.85rem; margin-top:20px;">현재 상점 환불 기능이 비활성화되어 있습니다.</p>`;
+    }
+
+    body.innerHTML = `
+        <h3 style="color:var(--primary); font-size:1.5rem;">${group.itemName}</h3>
+        <p style="color:#888;">보유 수량: ${group.count}개</p>
+        <p style="color:#888;">구매가: ₩${group.price.toLocaleString()}</p>
+        ${refundHtml}
+    `;
+    modal.style.display = 'block';
 };
 
 window.addEventListener('load', () => {
