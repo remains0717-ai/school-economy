@@ -566,6 +566,7 @@ class AuthManager {
                 const mgmtCode = document.getElementById('mgmt-class-code');
                 if (mgmtCode) mgmtCode.textContent = this.currentUser.classCode;
                 this.loadStudentList();
+                this.loadStudentAssets();
                 this.simulation.loadClassLogs();
             } else {
                 if (els.adminMenu) els.adminMenu.classList.add('hidden');
@@ -577,6 +578,50 @@ class AuthManager {
             if (els.userInfo) els.userInfo.classList.add('hidden');
             if (els.adminMenu) els.adminMenu.classList.add('hidden');
             if (els.adminBankMgmt) els.adminBankMgmt.classList.add('hidden');
+        }
+    }
+
+    async loadStudentAssets() {
+        if (!this.currentUser || this.currentUser.role !== 'admin') return;
+        const tbody = document.getElementById('asset-mgmt-body');
+        if (!tbody) return;
+
+        // 1. 학급 학생 목록 가져오기
+        const studentSnapshot = await db.collection('users')
+            .where('role', '==', 'student')
+            .where('adminCode', '==', this.currentUser.classCode)
+            .get();
+
+        tbody.innerHTML = '';
+        
+        // 2. 각 학생의 자산 데이터(playerData) 가져오기
+        for (const studentDoc of studentSnapshot.docs) {
+            const student = studentDoc.data();
+            const assetDoc = await db.collection('playerData').doc(studentDoc.id).get();
+            const assets = assetDoc.exists ? assetDoc.data() : { cash: 0, bankBalance: 0, portfolio: {} };
+
+            // 주식 평가액 계산 (현재 시뮬레이션 가격 기준)
+            let stockValue = 0;
+            if (assets.portfolio) {
+                for (const sym in assets.portfolio) {
+                    const p = assets.portfolio[sym];
+                    // 관리자 화면에서도 현재 시뮬레이션 가격을 알 수 있도록 simulation 객체 활용
+                    const curPrice = (sym === this.simulation.currentStockSymbol ? this.simulation.currentStockPrice : p.avgPrice);
+                    stockValue += p.amount * curPrice;
+                }
+            }
+
+            const total = (assets.cash || 0) + (assets.bankBalance || 0) + stockValue;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${student.username}</td>
+                <td>₩${Math.floor(assets.cash || 0).toLocaleString()}</td>
+                <td>₩${Math.floor(assets.bankBalance || 0).toLocaleString()}</td>
+                <td>₩${Math.floor(stockValue).toLocaleString()}</td>
+                <td style="color: #00ffdd; font-weight: bold;">₩${Math.floor(total).toLocaleString()}</td>
+            `;
+            tbody.appendChild(tr);
         }
     }
 

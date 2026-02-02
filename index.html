@@ -261,7 +261,25 @@
 
             <!-- 기타 관리 메뉴들 -->
             <div id="import-export-view" class="view"><h2>보내기 가져오기</h2><p>준비 중입니다.</p></div>
-            <div id="asset-mgmt-view" class="view"><h2>자산 관리</h2><p>준비 중입니다.</p></div>
+            <div id="asset-mgmt-view" class="view">
+                <h2>학급 자산 관리</h2>
+                <div class="student-list-container">
+                    <table id="asset-mgmt-table">
+                        <thead>
+                            <tr>
+                                <th>학생 아이디</th>
+                                <th>현금</th>
+                                <th>은행 예금</th>
+                                <th>주식 평가액</th>
+                                <th>총 자산</th>
+                            </tr>
+                        </thead>
+                        <tbody id="asset-mgmt-body">
+                            <!-- 학생 자산 현황 로드 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             <div id="job-mgmt-view" class="view"><h2>직업 관리</h2><p>준비 중입니다.</p></div>
             <div id="stats-mgmt-view" class="view"><h2>통계 관리</h2><p>준비 중입니다.</p></div>
         </main>
