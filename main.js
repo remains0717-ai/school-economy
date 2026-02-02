@@ -128,24 +128,35 @@ class AuthManager {
         const data = window.userState.classData;
         if (!data) return;
         const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        const setVal = (id, val) => { 
+            const el = document.getElementById(id); 
+            if (el && document.activeElement !== el) el.value = val; 
+        };
         
         const baseRate = data.baseRate || 0;
         const maturityHours = data.maturityHours || 24;
         const loanSpread = data.loanSpread || 2.0;
         const bondSpread = data.bondSpread || 1.0;
 
+        // 전역 지표 업데이트
         setEl('class-treasury', `₩${(data.treasury || 0).toLocaleString()}`);
         setEl('treasury-amount', (data.treasury || 0).toLocaleString());
         setEl('debt-amount', (data.debt || 0).toLocaleString());
         setEl('display-base-rate', baseRate);
         
-        // 관리자 뷰 업데이트
+        // 관리자 정책 뷰 레이블 업데이트
         setEl('current-deposit-rate', baseRate);
         setEl('current-loan-rate', (baseRate + loanSpread).toFixed(1));
         setEl('current-bond-rate', (baseRate + bondSpread).toFixed(1));
         setEl('display-loan-spread', loanSpread);
         setEl('display-bond-spread', bondSpread);
         setEl('current-maturity-display', maturityHours);
+
+        // 관리자 정책 입력창 업데이트 (포커스가 없을 때만)
+        setVal('policy-base-rate', baseRate);
+        setVal('policy-maturity-hours', maturityHours);
+        setVal('policy-loan-spread', loanSpread);
+        setVal('policy-bond-spread', bondSpread);
 
         // 학생 뷰 업데이트
         setEl('student-deposit-rate', `${baseRate}%`);
@@ -161,20 +172,8 @@ class AuthManager {
     }
 
     async loadAdminLists() {
-        const code = window.userState.currentUser?.classCode;
+        const code = window.userState.currentUser?.classCode || window.userState.currentUser?.adminCode;
         if (!code) return;
-
-        // 중앙은행 정책 설정 필드 초기화 (최초 1회만)
-        if (!this.policyInitialized) {
-            const data = window.userState.classData;
-            if (data) {
-                document.getElementById('policy-base-rate').value = data.baseRate || 0;
-                document.getElementById('policy-maturity-hours').value = data.maturityHours || 24;
-                document.getElementById('policy-loan-spread').value = data.loanSpread || 2.0;
-                document.getElementById('policy-bond-spread').value = data.bondSpread || 1.0;
-                this.policyInitialized = true;
-            }
-        }
 
         // 학생 목록 (승인 관리용)
         db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(snap => {
