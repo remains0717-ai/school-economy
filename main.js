@@ -371,30 +371,12 @@ class AuthManager {
         try {
             await auth.signInWithEmailAndPassword(email, pass);
             this.closeModal();
-            alert('로그인이 완료되었습니다. 환영합니다!');
+            // 캐시 문제를 해결하기 위해 로그인 성공 시 페이지 강제 새로고침
+            location.reload(); 
         } catch (error) {
-            console.error("Login Error Code:", error.code);
-            let msg = '로그인에 실패했습니다.';
-            
-            switch (error.code) {
-                case 'auth/user-not-found':
-                    msg = '가입되지 않은 아이디입니다. 아이디를 확인하거나 회원가입을 해주세요.';
-                    break;
-                case 'auth/wrong-password':
-                    msg = '비밀번호가 일치하지 않습니다.';
-                    break;
-                case 'auth/invalid-credential':
-                    msg = '아이디가 존재하지 않거나 비밀번호가 틀렸습니다.\n(관리자 계정이라면 가입 시 입력한 이메일을 입력했는지 확인해주세요.)';
-                    break;
-                case 'auth/invalid-email':
-                    msg = '아이디 또는 이메일 형식이 올바르지 않습니다.';
-                    break;
-                case 'auth/too-many-requests':
-                    msg = '너무 많은 로그인 시도가 감지되었습니다. 잠시 후 다시 시도해주세요.';
-                    break;
-                default:
-                    msg = '로그인 중 오류가 발생했습니다: ' + error.message;
-            }
+            console.error("Login Error:", error.code);
+            let msg = '아이디 또는 비밀번호가 틀렸습니다.';
+            if (error.code === 'auth/too-many-requests') msg = '로그인 시도가 너무 많습니다. 나중에 다시 해주세요.';
             alert(msg);
         }
     }
