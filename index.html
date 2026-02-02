@@ -25,60 +25,29 @@
         </div>
     </header>
 
-    <!-- [관리자 전용] 통합 관리 모달 -->
-    <div id="admin-settings-modal" class="modal">
-        <div class="modal-content" style="width: 600px; max-height: 80vh; overflow-y: auto;">
-            <span class="close-admin-settings" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
-            <h2>학급 경제 설정</h2>
-            
-            <div class="setting-section">
-                <h3>📢 학급 뉴스 발행</h3>
-                <input type="text" id="news-input" placeholder="학생들에게 알릴 뉴스를 입력하세요">
-                <button id="publish-news-btn" class="submit-btn" style="background:#ff9800">뉴스 게시</button>
-            </div>
-
-            <div class="setting-section" style="margin-top:20px;">
-                <h3>💼 직업 및 월급 관리</h3>
-                <div style="display:flex; gap:10px;">
-                    <input type="text" id="job-name-input" placeholder="직업명">
-                    <input type="number" id="job-salary-input" placeholder="월급(₩)">
-                    <button id="add-job-btn" class="auth-btn">추가</button>
-                </div>
-                <div id="admin-job-list" style="margin-top:10px;"></div>
-                <button id="pay-salary-btn" class="submit-btn" style="background:#00ffdd; color:#1a1a1a;">전체 학생 월급 지급</button>
-            </div>
-
-            <div class="setting-section" style="margin-top:20px;">
-                <h3>🛒 상점 물품 관리</h3>
-                <input type="text" id="item-name" placeholder="물품명">
-                <input type="number" id="item-price" placeholder="가격">
-                <input type="number" id="item-stock" placeholder="수량">
-                <button id="add-item-btn" class="submit-btn">상점 물품 추가</button>
-                <div id="admin-item-list" style="margin-top:10px;"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 기존 모달들 생략 방지용 통합 -->
+    <!-- 모달: 인증 (로그인/회원가입) -->
     <div id="auth-modal" class="modal">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
             <div id="login-form-container">
                 <h2>로그인</h2>
                 <form id="login-form">
-                    <input type="text" id="login-username" placeholder="아이디 또는 이메일">
-                    <input type="password" id="login-password" placeholder="비밀번호">
+                    <input type="text" id="login-username" placeholder="아이디 또는 이메일" required>
+                    <input type="password" id="login-password" placeholder="비밀번호" required>
                     <button type="submit" class="submit-btn">로그인</button>
                 </form>
             </div>
             <div id="signup-form-container" class="hidden">
                 <h2>회원가입</h2>
                 <form id="signup-form">
-                    <select id="signup-role"><option value="student">학생</option><option value="admin">관리자</option></select>
+                    <select id="signup-role">
+                        <option value="student">학생</option>
+                        <option value="admin">관리자</option>
+                    </select>
                     <div id="signup-username-container"><input type="text" id="signup-username" placeholder="아이디"></div>
                     <div id="signup-class-code-container"><input type="text" id="signup-class-code" placeholder="학급 코드"></div>
                     <input type="email" id="signup-email" class="hidden" placeholder="이메일">
-                    <input type="password" id="signup-password" placeholder="비밀번호(6자 이상)" required>
+                    <input type="password" id="signup-password" placeholder="비밀번호 (6자 이상)" required>
                     <button type="submit" class="submit-btn">가입하기</button>
                 </form>
             </div>
@@ -86,6 +55,7 @@
         </div>
     </div>
 
+    <!-- 모달: 내 정보 -->
     <div id="my-info-modal" class="modal">
         <div class="modal-content">
             <span class="close-my-info" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
@@ -95,19 +65,28 @@
                 <p>역할: <span id="info-role"></span></p>
                 <p>직업: <span id="info-job" style="color:#00ffdd">무직</span></p>
                 <p>신용 등급: <span id="info-credit" style="color:#ffeb3b">5등급</span></p>
-                <div class="code-box"><p>학급 코드</p><strong id="info-class-code"></strong></div>
+                <div class="code-box"><p>소속 학급 코드</p><strong id="info-class-code"></strong></div>
             </div>
         </div>
     </div>
 
-    <!-- 플로팅 관리자 버튼 -->
-    <div id="admin-fab" class="fab hidden">⚙️</div>
+    <!-- 모달: 자산 수정 (관리자용) -->
+    <div id="modify-asset-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modify-asset" style="float: right; cursor: pointer; font-size: 28px;">&times;</span>
+            <h2>자산 강제 제어</h2>
+            <p>대상: <span id="modify-target-name" style="color:#00ffdd"></span></p>
+            <input type="number" id="modify-cash-amount" placeholder="변경할 잔고">
+            <input type="text" id="modify-reason" placeholder="수정 사유" style="margin-top:10px;">
+            <button id="confirm-modify-asset" class="submit-btn">확인 및 저장</button>
+        </div>
+    </div>
 
     <div class="container">
         <nav class="sidebar">
             <ul>
                 <li><a href="#" id="home-link" class="active">홈</a></li>
-                <li class="menu-item menu-group">
+                <li class="menu-item">
                     <a href="#" class="parent-link"><span>은행 & 금융</span><span class="chevron"></span></a>
                     <ul class="sub-menu">
                         <li><a href="#" id="bank-main-link">중앙 은행</a></li>
@@ -126,17 +105,17 @@
                 <li id="admin-menu" class="menu-item hidden menu-group">
                     <a href="#" id="class-mgmt-link" class="parent-link" style="color:#ff4d4d"><span>학급 운영</span><span class="chevron"></span></a>
                     <ul class="sub-menu">
-                        <li><a href="#" id="asset-mgmt-link">자산 관리</a></li>
                         <li><a href="#" id="account-mgmt-link">학생 관리</a></li>
+                        <li><a href="#" id="asset-mgmt-link">자산 관리</a></li>
                         <li><a href="#" id="treasury-link">학급 국고</a></li>
-                        <li><a href="#" id="db-mgmt-link">데이터베이스</a></li>
+                        <li><a href="#" id="db-mgmt-link">데이터베이스 로그</a></li>
                     </ul>
                 </li>
             </ul>
         </nav>
 
         <main class="content-area">
-            <!-- 홈 화면: 요약 정보 카드 확대 -->
+            <!-- [1] 홈 화면 -->
             <div id="home-view" class="view active">
                 <div id="logged-in-home" class="hidden">
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
@@ -153,6 +132,12 @@
                             <p>학급 국고: <span id="class-treasury" style="color:#00ffdd">0</span></p>
                         </div>
                     </div>
+                    <div class="inventory-section">
+                        <h3>🎒 나의 가방 (보유 아이템)</h3>
+                        <div id="home-inventory-grid" class="inventory-grid">
+                            <p style="color:#666;">보유 중인 아이템이 없습니다.</p>
+                        </div>
+                    </div>
                 </div>
                 <div id="logged-out-home" class="guest-msg">
                     <h2>환영합니다!</h2>
@@ -161,37 +146,151 @@
                 </div>
             </div>
 
-            <!-- 신설: 학급 국고 뷰 -->
-            <div id="treasury-view" class="view">
-                <h2>학급 국고 (Public Treasury)</h2>
-                <div class="bank-info-card">
-                    <p>현재 국고 잔액: ₩ <span id="treasury-amount" class="important-metric">0</span></p>
-                    <p style="font-size:0.9em; color:#888;">* 학생들의 세금과 벌금으로 운영되는 공공 자금입니다.</p>
-                </div>
-                <div style="margin-top:20px;">
-                    <h3>최근 국고 입출력 내역</h3>
-                    <ul id="treasury-logs" class="log-box" style="height:300px;"></ul>
+            <!-- [2] 중앙 은행 메인 -->
+            <div id="bank-main-view" class="view">
+                <h2>중앙 은행</h2>
+                <div class="bank-container">
+                    <div class="bank-info-card">
+                        <p>나의 예금 잔액: ₩ <span id="bank-balance-amount" class="important-metric">0</span></p>
+                        <small id="bank-current-settings">연 이자율: --% / 만기: --초</small>
+                    </div>
+                    <div class="bank-controls" style="margin-top:20px;">
+                        <input type="number" id="bank-amount" placeholder="입금할 금액">
+                        <div class="button-group" style="display:flex; gap:10px; margin-top:10px;">
+                            <button id="deposit-btn" class="auth-btn" style="flex:1; background:var(--primary); color:#1a1a1a;">입금하기</button>
+                            <button id="withdraw-btn" class="auth-btn" style="flex:1;">만기금 수령</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- 신설: 대출 서비스 뷰 -->
+            <!-- [3] 예/적금 현황 -->
+            <div id="deposit-status-view" class="view">
+                <h2>예/적금 현황</h2>
+                <table><thead><tr><th>입금액</th><th>이자율</th><th>예상 이자</th><th>만기</th><th>상태</th></tr></thead><tbody id="deposit-list-body"></tbody></table>
+            </div>
+
+            <!-- [4] 대출 서비스 -->
             <div id="loan-view" class="view">
                 <h2>중앙 은행 대출</h2>
                 <div class="asset-status">
                     <p>나의 신용 등급: <span id="loan-credit-grade" style="color:#ffeb3b">5등급</span></p>
                     <p>대출 가능 한도: ₩ <span id="loan-limit" style="color:#00ffdd">0</span></p>
-                    <hr>
+                    <hr style="margin:20px 0; border-color:#333;">
                     <input type="number" id="loan-request-amount" placeholder="신청 금액">
                     <button id="apply-loan-btn" class="submit-btn">대출 신청하기</button>
                 </div>
             </div>
 
-            <!-- 기존 뷰들 유지 -->
-            <div id="shop-view" class="view"><h2>상점</h2><div id="shop-item-grid" class="shop-grid"></div></div>
-            <div id="bank-main-view" class="view"><h2>중앙 은행</h2><div class="bank-container">...</div></div>
-            <div id="asset-mgmt-view" class="view"><h2>학급 자산 관리</h2><table id="asset-mgmt-table"><thead><tr><th>학생</th><th>현금</th><th>예금</th><th>총 자산</th><th>관리</th></tr></thead><tbody id="asset-mgmt-body"></tbody></table></div>
-            <div id="account-mgmt-view" class="view"><h2>학생 관리</h2><table id="student-table"><thead><tr><th>아이디</th><th>실명/직업</th><th>권한</th><th>관리</th></tr></thead><tbody id="student-list-body"></tbody></table></div>
-            <div id="db-mgmt-view" class="view"><h2>데이터베이스</h2><div class="log-box"><ul id="class-logs"></ul></div></div>
+            <!-- [5] 모의 주식 투자 -->
+            <div id="stock-trading-view" class="view">
+                <h2>모의 주식 투자</h2>
+                <div class="stock-search" style="display:flex; gap:10px;"><input type="text" id="stock-symbol" placeholder="AAPL"><button id="load-stock-btn" class="auth-btn">차트 로드</button></div>
+                <div id="stock-chart-container" style="height:400px; background:#1a1a1a; margin:20px 0; border-radius:10px; border:1px solid #333;"></div>
+                <div class="trading-panel" style="background:#1e1e1e; padding:20px; border-radius:10px;">
+                    <h3 id="display-stock-name">종목을 선택하세요</h3>
+                    <p>현재가: <span id="current-stock-price" class="important-metric">0</span></p>
+                    <div class="trade-controls" style="display:flex; gap:10px; margin-top:15px;"><input type="number" id="trade-amount" placeholder="수량"><button id="buy-stock-btn" class="auth-btn" style="background:#f44336; color:white; border:none;">매수</button><button id="sell-stock-btn" class="auth-btn" style="background:#2196f3; color:white; border:none;">매도</button></div>
+                </div>
+            </div>
+
+            <!-- [6] 투자 수익률 -->
+            <div id="portfolio-view" class="view">
+                <h2>나의 투자 수익률</h2>
+                <table><thead><tr><th>종목</th><th>수량</th><th>평균단가</th><th>현재가</th><th>수익률</th><th>평가금액</th></tr></thead><tbody id="portfolio-body"></tbody></table>
+            </div>
+
+            <!-- [7] 상점 -->
+            <div id="shop-view" class="view">
+                <h2>상점</h2>
+                <div id="admin-shop-controls" class="asset-status hidden" style="border-style: dashed; margin-bottom: 40px;">
+                    <h3>📦 새 물품 등록 (관리자)</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                        <input type="text" id="item-category" placeholder="종류 (예: 쿠폰, 간식)">
+                        <input type="text" id="item-name" placeholder="물품 이름">
+                        <input type="number" id="item-price" placeholder="가격 (₩)">
+                        <input type="number" id="item-stock" placeholder="초기 수량">
+                    </div>
+                    <button id="add-item-btn" class="submit-btn" style="margin-top: 20px;">상점에 물품 등록하기</button>
+                </div>
+                <div id="shop-content-container"></div>
+            </div>
+
+            <!-- [8] 학생 관리 (관리자) -->
+            <div id="account-mgmt-view" class="view">
+                <h2>학급 학생 관리</h2>
+                <p>내 학급 코드: <strong id="mgmt-class-code" class="important-metric"></strong></p>
+                <table><thead><tr><th>아이디</th><th>실명/직업</th><th>권한</th><th>관리</th></tr></thead><tbody id="student-list-body"></tbody></table>
+            </div>
+
+            <!-- [9] 자산 관리 (관리자 개편) -->
+            <div id="asset-mgmt-view" class="view">
+                <h2>학생 자산 상세 모니터링</h2>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllStudents"></th>
+                                <th>학생명</th>
+                                <th>현금</th>
+                                <th>예금</th>
+                                <th>총 자산</th>
+                                <th>관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="asset-mgmt-body"></tbody>
+                    </table>
+                </div>
+                
+                <!-- [멀티 지급바] -->
+                <div id="bulk-action-bar" class="asset-status" style="border-color:var(--primary); margin-top:20px; display:flex; align-items:center; gap:20px; padding:15px;">
+                    <div style="flex:1">
+                        <span id="selected-count" style="color:var(--primary); font-weight:bold;">0</span>명 선택됨
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="number" id="bulk-cash-amount" placeholder="지급할 금액" style="width:120px;">
+                        <button onclick="window.sendBulkAssets()" class="auth-btn" style="background:var(--primary); color:#1a1a1a;">현금 지급</button>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center; border-left:1px solid #444; padding-left:20px;">
+                        <select id="bulk-item-select" style="width:150px;"><option value="">아이템 선택</option></select>
+                        <button onclick="window.sendBulkItems()" class="auth-btn">아이템 선물</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- [10] 학급 국고 -->
+            <div id="treasury-view" class="view">
+                <h2>학급 국고 및 재정 현황</h2>
+                
+                <!-- [관리자 전용] 국고 조절 섹션 -->
+                <div id="admin-treasury-controls" class="asset-status hidden" style="border-style: dashed; margin-bottom: 30px;">
+                    <h3>💰 국고 자금 조절 (관리자)</h3>
+                    <p style="font-size: 0.9rem; color: #888;">초기 자금을 설정하거나 국고 예산을 직접 조정할 수 있습니다.</p>
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <input type="number" id="adj-treasury-amount" placeholder="조정할 금액 (₩)">
+                        <button onclick="window.adjustTreasury('set')" class="auth-btn" style="background: var(--primary); color: #1a1a1a;">설정하기</button>
+                        <button onclick="window.adjustTreasury('add')" class="auth-btn">추가하기</button>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                    <div class="asset-status">
+                        <h3>현재 국고 잔액</h3>
+                        <p>₩ <span id="treasury-amount" class="important-metric">0</span></p>
+                    </div>
+                    <div class="asset-status" style="border-color:var(--danger)">
+                        <h3>미상환 국채 (부채)</h3>
+                        <p>₩ <span id="debt-amount" style="color:var(--danger)" class="important-metric">0</span></p>
+                    </div>
+                </div>
+                <h3 style="margin-top:30px;">국고 변동 로그</h3>
+                <div class="log-box" style="height:300px;"><ul id="treasury-logs"></ul></div>
+            </div>
+
+            <div id="db-mgmt-view" class="view"><h2>전체 활동 데이터베이스</h2><div class="log-box" style="height:500px;"><ul id="class-logs"></ul></div></div>
+            <div id="job-mgmt-view" class="view"><h2>직업 관리</h2><p>학급 운영 메뉴에서 설정하세요.</p></div>
+            <div id="stats-mgmt-view" class="view"><h2>통계 관리</h2><p>준비 중입니다.</p></div>
+            <div id="import-export-view" class="view"><h2>가져오기/내보내기</h2><p>준비 중입니다.</p></div>
         </main>
     </div>
 
