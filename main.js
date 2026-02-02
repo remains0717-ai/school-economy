@@ -401,17 +401,31 @@ class AuthManager {
             return;
         }
 
+        if (role === 'student' && !username) {
+            alert('아이디를 입력해 주세요.');
+            return;
+        }
+
         // 학생 가입 시 학급 코드 검증
         if (role === 'student') {
-            const adminQuery = await db.collection('users').where('classCode', '==', studentClassCode).get();
-            if (adminQuery.empty) {
-                alert('유효하지 않은 학급 코드입니다. 관리자에게 확인해 주세요.');
+            try {
+                const adminQuery = await db.collection('users').where('classCode', '==', studentClassCode).get();
+                if (adminQuery.empty) {
+                    alert('유효하지 않은 학급 코드입니다. 관리자에게 확인해 주세요.');
+                    return;
+                }
+            } catch (err) {
+                alert('학급 코드 확인 중 오류가 발생했습니다: ' + err.message);
                 return;
             }
         }
 
         // 관리자는 이메일 앞부분을 아이디로 자동 설정
         if (role === 'admin') {
+            if (!adminEmail) {
+                alert('이메일을 입력해 주세요.');
+                return;
+            }
             username = adminEmail.split('@')[0];
         }
 
@@ -449,8 +463,15 @@ class AuthManager {
             
             this.closeModal();
         } catch (error) {
+            console.error("Signup Error:", error);
             let msg = '회원가입 실패: ' + error.message;
-            if (error.code === 'auth/email-already-in-use') msg = '이미 사용 중인 아이디 또는 이메일입니다.';
+            if (error.code === 'auth/email-already-in-use') {
+                msg = role === 'student' ? '이미 존재하는 아이디입니다.' : '이미 사용 중인 이메일입니다.';
+            } else if (error.code === 'auth/invalid-email') {
+                msg = '유효하지 않은 이메일 형식입니다.';
+            } else if (error.code === 'auth/weak-password') {
+                msg = '비밀번호가 너무 취약합니다.';
+            }
             alert(msg);
         }
     }
