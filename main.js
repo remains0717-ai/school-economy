@@ -301,12 +301,22 @@ class AuthManager {
     }
 
     closeModal() {
-        this.modal.style.display = 'none';
-        // Reset forms
-        document.getElementById('login-form').reset();
-        document.getElementById('signup-form').reset();
-        document.getElementById('signup-email').classList.add('hidden');
-        document.getElementById('class-code-display').classList.add('hidden');
+        if (this.modal) this.modal.style.display = 'none';
+        
+        // Reset forms safely
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        if (loginForm) loginForm.reset();
+        if (signupForm) signupForm.reset();
+
+        // Reset UI visibility states
+        const signupEmail = document.getElementById('signup-email');
+        const signupUsernameContainer = document.getElementById('signup-username-container');
+        const classCodeDisplay = document.getElementById('class-code-display');
+
+        if (signupEmail) signupEmail.classList.add('hidden');
+        if (signupUsernameContainer) signupUsernameContainer.classList.remove('hidden');
+        if (classCodeDisplay) classCodeDisplay.classList.add('hidden');
     }
 
     switchMode(mode) {
