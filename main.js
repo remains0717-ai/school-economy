@@ -428,10 +428,56 @@ window.openModifyModal = (uid, name, balance) => {
     window.currentModifyUid = uid;
 };
 
+window.confirmModifyAsset = async () => {
+    const amt = parseInt(document.getElementById('modify-cash-amount').value);
+    const uid = window.currentModifyUid;
+    if (!uid || isNaN(amt)) return alert("입력 오류");
+    try {
+        await db.collection('users').doc(uid).update({ balance: amt });
+        alert("자산이 강제 조정되었습니다.");
+        document.getElementById('modify-asset-modal').style.display = 'none';
+    } catch (err) { alert(err.message); }
+};
+
+window.sendBulkItems = async () => {
+    const selected = document.querySelectorAll('.student-checkbox:checked');
+    const itemId = document.getElementById('bulk-item-select').value;
+    const data = window.userState.classData;
+    const code = (window.userState.currentUser.classCode || window.userState.currentUser.adminCode).trim().toUpperCase();
+
+    if (selected.length === 0 || !itemId) return alert("학생과 아이템을 선택하세요.");
+
+    try {
+        const iRef = db.collection('items').doc(itemId);
+        const iDoc = await iRef.get();
+        const item = iDoc.data();
+        const totalCost = selected.length * item.price;
+
+        if (data.treasury < totalCost) return alert("국고 잔액이 부족하여 아이템을 구매할 수 없습니다.");
+        if (item.stock < selected.length) return alert("상점 재고가 부족합니다.");
+
+        if (!confirm(`${selected.length}명에게 [${item.name}]을 선물하시겠습니까?\n(국고 ₩${totalCost.toLocaleString()} 차감)`)) return;
+
+        const batch = db.batch();
+        selected.forEach(cb => {
+            batch.set(db.collection('users').doc(cb.value).collection('inventory').doc(), {
+                itemName: item.name, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        batch.update(iRef, { stock: firebase.firestore.FieldValue.increment(-selected.length) });
+        batch.update(db.collection('classes').doc(code), { treasury: firebase.firestore.FieldValue.increment(-totalCost) });
+        
+        await batch.commit();
+        alert("선물 완료!");
+    } catch (err) { alert(err.message); }
+};
+
 window.addEventListener('load', () => {
     window.simulation = new EconomicSimulation();
     window.authManager = new AuthManager(window.simulation);
     setupNavigation();
+    document.getElementById('confirm-modify-asset')?.addEventListener('click', window.confirmModifyAsset);
+    document.querySelector('.close-modify-asset')?.addEventListener('click', () => document.getElementById('modify-asset-modal').style.display='none');
 });
 
 function setupNavigation() {
