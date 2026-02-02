@@ -420,7 +420,7 @@ class AuthManager {
         const pass = passInput ? passInput.value : '';
         const adminEmail = emailInput ? emailInput.value.trim() : '';
         let username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
-        const studentClassCode = classCodeInput ? classCodeInput.value.trim().toUpperCase() : '';
+        const inputCode = classCodeInput ? classCodeInput.value.trim().toUpperCase() : '';
 
         if (pass.length < 6) {
             alert('비밀번호는 최소 6자 이상이어야 합니다.');
@@ -432,34 +432,39 @@ class AuthManager {
             return;
         }
 
+        // [가이드 준수] 학생 가입 시 입력한 학급코드가 Firestore 'classes'에 있는지 먼저 확인
         if (role === 'student') {
             try {
-                const classDoc = await db.collection('classes').doc(studentClassCode).get();
+                const classDoc = await db.collection('classes').doc(inputCode).get();
                 if (!classDoc.exists) {
                     alert('유효하지 않은 학급 코드입니다. 관리자에게 확인해 주세요.');
                     return;
                 }
             } catch (err) {
+                console.error("Class Verification Error:", err);
                 alert('학급 코드 확인 중 오류가 발생했습니다.');
                 return;
             }
         }
 
+        // 관리자는 이메일 앞부분을 아이디로 사용, 학생은 입력한 아이디 사용
         if (role === 'admin') {
             if (!adminEmail) { alert('이메일을 입력해 주세요.'); return; }
             username = adminEmail.split('@')[0];
         }
 
-        const email = role === 'admin' ? adminEmail : `${username}@school-economy.local`;
+        // [가이드 준수] 가상 이메일 도메인을 @student.com으로 설정
+        const email = role === 'admin' ? adminEmail : `${username}@student.com`;
 
         try {
             const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
             const user = userCredential.user;
             
-            let classCode = null;
+            let generatedClassCode = null;
             if (role === 'admin') {
-                classCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-                await db.collection('classes').doc(classCode).set({
+                // [가이드 준수] 관리자는 고유한 8자리 classCode 부여 및 'classes' 컬렉션 저장
+                generatedClassCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+                await db.collection('classes').doc(generatedClassCode).set({
                     adminUid: user.uid,
                     adminEmail: email,
                     className: `${username} 선생님의 학급`,
@@ -467,14 +472,17 @@ class AuthManager {
                 });
             }
 
+            // [가이드 준수] 사용자 문서 저장 (학생은 adminCode 필드 포함)
             await db.collection('users').doc(user.uid).set({
                 username: username,
                 role: role,
                 email: email,
-                classCode: role === 'admin' ? classCode : studentClassCode,
+                classCode: role === 'admin' ? generatedClassCode : null,
+                adminCode: role === 'student' ? inputCode : null, // 제안하신 필드명 적용
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
+            // 초기 자산 데이터 생성
             await db.collection('playerData').doc(user.uid).set({
                 cash: 1000,
                 bankBalance: 0,
@@ -485,13 +493,16 @@ class AuthManager {
             if (role === 'student') {
                 alert('회원가입이 완료되었습니다! 로그인해 주세요.');
             } else {
-                alert(`회원가입 완료! 학급 코드: [${classCode}]`);
+                alert(`관리자 가입 완료! 학급 코드가 발급되었습니다.\n코드: [${generatedClassCode}]`);
             }
             this.closeModal();
             window.location.reload();
         } catch (error) {
+            console.error("Signup Error:", error);
             let msg = '회원가입 실패: ' + error.message;
-            if (error.code === 'auth/email-already-in-use') msg = '이미 사용 중인 아이디 또는 이메일입니다.';
+            if (error.code === 'auth/email-already-in-use') {
+                msg = role === 'student' ? '이미 존재하는 아이디입니다.' : '이미 사용 중인 이메일입니다.';
+            }
             alert(msg);
         }
     }
