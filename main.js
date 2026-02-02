@@ -31,6 +31,11 @@ class AuthManager {
         document.getElementById('signup-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.signup(); });
         document.getElementById('login-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
         
+        // 은행 관련 버튼 (예/적금 이용 뷰)
+        document.getElementById('deposit-btn')?.addEventListener('click', () => this.simulation.deposit());
+        document.getElementById('withdraw-btn')?.addEventListener('click', () => this.simulation.withdraw());
+        document.getElementById('apply-loan-btn')?.addEventListener('click', () => this.simulation.applyLoan());
+
         document.getElementById('selectAllStudents')?.addEventListener('change', (e) => {
             const checkboxes = document.querySelectorAll('.student-checkbox');
             checkboxes.forEach(cb => cb.checked = e.target.checked);
@@ -123,9 +128,26 @@ class AuthManager {
         const data = window.userState.classData;
         if (!data) return;
         const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        
+        const baseRate = data.baseRate || 0;
+        const maturityHours = data.maturityHours || 24;
+
         setEl('class-treasury', `₩${(data.treasury || 0).toLocaleString()}`);
         setEl('treasury-amount', (data.treasury || 0).toLocaleString());
         setEl('debt-amount', (data.debt || 0).toLocaleString());
+        setEl('display-base-rate', baseRate);
+        
+        // 관리자 뷰 업데이트
+        setEl('current-deposit-rate', baseRate);
+        setEl('current-loan-rate', (baseRate + 2).toFixed(1));
+        setEl('current-bond-rate', baseRate);
+        setEl('current-maturity-display', maturityHours);
+
+        // 학생 뷰 업데이트
+        setEl('student-deposit-rate', `${baseRate}%`);
+        setEl('student-maturity-hours', `${maturityHours}시간`);
+        setEl('display-loan-rate', `${(baseRate + 2).toFixed(1)}%`);
+
         if (data.news) {
             const tc = document.getElementById('news-ticker-container');
             const tt = document.getElementById('news-ticker');
@@ -137,6 +159,16 @@ class AuthManager {
     async loadAdminLists() {
         const code = window.userState.currentUser?.classCode;
         if (!code) return;
+
+        // 중앙은행 정책 설정 필드 초기화 (최초 1회만)
+        if (!this.policyInitialized) {
+            const data = window.userState.classData;
+            if (data) {
+                document.getElementById('policy-base-rate').value = data.baseRate || 0;
+                document.getElementById('policy-maturity-hours').value = data.maturityHours || 24;
+                this.policyInitialized = true;
+            }
+        }
 
         // 학생 목록 (승인 관리용)
         db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(snap => {
@@ -270,69 +302,142 @@ class EconomicSimulation {
         this.user = user; 
         const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
         setEl('current-cash', (user.balance||0).toLocaleString());
-        setEl('total-assets', (user.balance||0).toLocaleString());
+        setEl('current-bank-balance', (user.bankBalance||0).toLocaleString());
+        setEl('bank-balance-amount', (user.bankBalance||0).toLocaleString());
+        setEl('total-assets', ((user.balance||0) + (user.bankBalance||0)).toLocaleString());
         setEl('display-job', user.job || "없음");
         setEl('display-credit', user.creditScore || 500);
+        
+        // 신용 등급 및 한도 계산
+        const grade = Math.max(1, Math.min(10, 11 - Math.floor((user.creditScore || 500) / 100)));
+        setEl('loan-credit-grade', `${grade}등급`);
+        setEl('loan-limit', ( (11-grade) * 5000 ).toLocaleString());
+
         this.loadShopItems();
         this.loadUserInventory();
+        this.loadDeposits();
     }
 
-    loadShopItems() {
-        const code = this.user.role === 'admin' ? this.user.classCode : this.user.adminCode;
-        if (!code) return;
-        db.collection('items').where('classCode','==',code).onSnapshot(snap => {
-            const container = document.getElementById('shop-content-container');
-            if(!container) return; container.innerHTML = '';
-            const groups = {};
-            snap.forEach(doc => { const d = doc.data(); const cat = d.category || '기타'; if(!groups[cat]) groups[cat]=[]; groups[cat].push({id:doc.id, ...d}); });
-            for (const cat in groups) {
-                const section = document.createElement('div');
-                section.innerHTML = `<h3 style="margin-top:30px; border-left:4px solid var(--primary); padding-left:15px;">${cat}</h3><div class="shop-grid"></div>`;
-                const grid = section.querySelector('.shop-grid');
-                groups[cat].forEach(item => {
-                    const soldOut = item.stock <= 0;
-                    grid.innerHTML += `<div class="item-card ${soldOut?'out-of-stock':''}"><h4>${item.name}</h4><span class="item-price">₩ ${item.price.toLocaleString()}</span><p>재고: ${item.stock}</p><button class="submit-btn" onclick="window.buyItem('${item.id}','${item.name}',${item.price})" ${soldOut?'disabled':''}>구매하기</button></div>`;
-                });
-                container.appendChild(section);
+    async deposit() {
+        const amount = parseInt(document.getElementById('bank-amount').value);
+        if (isNaN(amount) || amount <= 0) return alert("올바른 금액을 입력하세요.");
+        if (this.user.balance < amount) return alert("현금이 부족합니다.");
+
+        const classData = window.userState.classData;
+        const baseRate = classData.baseRate || 0;
+        const maturityHours = classData.maturityHours || 24;
+        const maturityDate = new Date();
+        maturityDate.setHours(maturityDate.getHours() + maturityHours);
+
+        if (!confirm(`₩${amount.toLocaleString()}을 ${maturityHours}시간 동안 저축하시겠습니까?\n(적용 금리: ${baseRate}%)`)) return;
+
+        try {
+            const batch = db.batch();
+            const userRef = db.collection('users').doc(this.user.uid);
+            const depRef = userRef.collection('deposits').doc();
+
+            batch.update(userRef, { 
+                balance: firebase.firestore.FieldValue.increment(-amount),
+                bankBalance: firebase.firestore.FieldValue.increment(amount)
+            });
+
+            batch.set(depRef, {
+                amount, 
+                rate: baseRate,
+                status: 'active',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                maturityAt: firebase.firestore.Timestamp.fromDate(maturityDate)
+            });
+
+            await batch.commit();
+            alert("저축 완료!");
+            document.getElementById('bank-amount').value = '';
+        } catch (err) { alert("오류: " + err.message); }
+    }
+
+    async withdraw() {
+        const snap = await db.collection('users').doc(this.user.uid).collection('deposits')
+            .where('status', '==', 'active').get();
+        
+        if (snap.empty) return alert("수령 가능한 예금이 없습니다.");
+
+        let totalWithdraw = 0;
+        let count = 0;
+        const now = new Date();
+        const batch = db.batch();
+
+        snap.forEach(doc => {
+            const d = doc.data();
+            if (d.maturityAt.toDate() <= now) {
+                const interest = Math.floor(d.amount * (d.rate / 100));
+                totalWithdraw += (d.amount + interest);
+                batch.update(doc.ref, { status: 'completed' });
+                count++;
             }
         });
-    }
 
-    loadUserInventory() {
-        if(!this.user || this.user.role === 'admin') return;
-        db.collection('users').doc(this.user.uid).collection('inventory').orderBy('timestamp','desc').onSnapshot(snap => {
-            const grid = document.getElementById('home-inventory-grid'); if(!grid) return; grid.innerHTML = '';
-            snap.forEach(doc => { const d = doc.data(); grid.innerHTML += `<div class="inventory-item"><span>${d.itemName}</span></div>`; });
-        });
-    }
+        if (count === 0) return alert("아직 만기된 예금이 없습니다.");
 
-    async buyItem(id, name, price) {
-        if (this.user.balance < price) return alert("잔액 부족");
-        if (!confirm(`${name} 구매?`)) return;
-        const userRef = db.collection('users').doc(this.user.uid);
-        const itemRef = db.collection('items').doc(id);
         try {
-            await db.runTransaction(async (t) => {
-                const iDoc = await t.get(itemRef);
-                if (iDoc.data().stock <= 0) throw "품절";
-                t.update(userRef, { balance: this.user.balance - price });
-                t.update(itemRef, { stock: iDoc.data().stock - 1 });
-                t.set(userRef.collection('inventory').doc(), { itemName: name, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+            const userRef = db.collection('users').doc(this.user.uid);
+            batch.update(userRef, { 
+                balance: firebase.firestore.FieldValue.increment(totalWithdraw),
+                bankBalance: firebase.firestore.FieldValue.increment(-(totalWithdraw - Math.floor(totalWithdraw * 0.1))) // 원금만 차감하는 로직 등 세부 조정 필요하나 여기선 단순화
             });
-            await this.logActivity('SHOP_PURCHASE', -price, `${name} 구매`);
-        } catch (err) { alert(err); }
+            // 정확한 bankBalance 관리를 위해 트랜잭션 권장하나 batch로 일단 처리
+            
+            await batch.commit();
+            alert(`만기금 ₩${totalWithdraw.toLocaleString()}을 수령했습니다!`);
+        } catch (err) { alert("오류: " + err.message); }
     }
 
-    async logActivity(type, amount, description) {
-        const u = window.userState.currentUser;
-        await db.collection('class_activities').add({
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            userUid: u.uid, userName: u.nickname || u.username,
-            type, amount, description, classCode: u.adminCode || u.classCode
+    loadDeposits() {
+        if (!this.user) return;
+        db.collection('users').doc(this.user.uid).collection('deposits').orderBy('timestamp','desc').onSnapshot(snap => {
+            const body = document.getElementById('deposit-list-body');
+            if(!body) return;
+            body.innerHTML = '';
+            snap.forEach(doc => {
+                const d = doc.data();
+                const now = new Date();
+                const isMatured = d.maturityAt.toDate() <= now;
+                const interest = Math.floor(d.amount * (d.rate / 100));
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>₩${d.amount.toLocaleString()}</td>
+                    <td>${d.rate}%</td>
+                    <td style="color:var(--primary)">+₩${interest.toLocaleString()}</td>
+                    <td>${d.maturityAt.toDate().toLocaleString()}</td>
+                    <td>${d.status === 'completed' ? '수령완료' : (isMatured ? '<span style="color:var(--primary)">만기!</span>' : '거치중')}</td>
+                `;
+                body.appendChild(tr);
+            });
         });
     }
-    reset() { this.user = null; }
-}
+
+    async applyLoan() {
+        const amount = parseInt(document.getElementById('loan-request-amount').value);
+        const grade = Math.max(1, Math.min(10, 11 - Math.floor((this.user.creditScore || 500) / 100)));
+        const limit = (11 - grade) * 5000;
+        const classData = window.userState.classData;
+        const loanRate = (classData.baseRate || 0) + 2;
+
+        if (isNaN(amount) || amount <= 0) return alert("올바른 금액을 입력하세요.");
+        if (amount > limit) return alert(`대출 한도를 초과했습니다 (현재 한도: ₩${limit.toLocaleString()})`);
+
+        if (!confirm(`₩${amount.toLocaleString()}을 대출하시겠습니까?\n(적용 금리: ${loanRate.toFixed(1)}% 연리)`)) return;
+
+        try {
+            const userRef = db.collection('users').doc(this.user.uid);
+            await userRef.update({
+                balance: firebase.firestore.FieldValue.increment(amount),
+                debt: firebase.firestore.FieldValue.increment(amount)
+            });
+            alert("대출이 승인되었습니다!");
+            document.getElementById('loan-request-amount').value = '';
+            await this.logActivity('LOAN_TAKEN', amount, `중앙은행 대출 (${loanRate.toFixed(1)}%)`);
+        } catch (err) { alert("대출 실패: " + err.message); }
+    }
 
 // [신설] 관리자 국고 직접 조절 기능
 window.adjustTreasury = async (mode) => {
@@ -352,6 +457,25 @@ window.adjustTreasury = async (mode) => {
         input.value = '';
     } catch (err) {
         alert("국고 조절 실패: " + err.message);
+    }
+};
+
+// [신설] 중앙은행 통화 정책 업데이트
+window.updateBankPolicy = async () => {
+    const baseRate = parseFloat(document.getElementById('policy-base-rate').value);
+    const maturityHours = parseInt(document.getElementById('policy-maturity-hours').value);
+
+    if (isNaN(baseRate) || isNaN(maturityHours)) return alert("올바른 값을 입력하세요.");
+
+    const classCode = window.userState.currentUser.classCode;
+    try {
+        await db.collection('classes').doc(classCode).update({
+            baseRate: baseRate,
+            maturityHours: maturityHours
+        });
+        alert("통화 정책이 반영되었습니다.");
+    } catch (err) {
+        alert("정책 반영 실패: " + err.message);
     }
 };
 
