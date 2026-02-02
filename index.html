@@ -256,9 +256,12 @@
                 <div class="stock-container">
                     <!-- 위쪽: 가로로 넓은 차트 -->
                     <div class="asset-status" style="margin-top:0; padding: 10px;">
-                        <div style="display:flex; gap:10px; margin-bottom:10px; max-width: 500px;">
-                            <input type="text" id="stock-search-input" placeholder="종목 코드 입력 (예: AAPL, TSLA, BTCUSD)" style="flex:1">
-                            <button id="search-stock-btn" class="auth-btn" style="width:80px;">검색</button>
+                        <div style="position: relative; max-width: 500px; margin-bottom: 10px;">
+                            <div style="display:flex; gap:10px;">
+                                <input type="text" id="stock-search-input" placeholder="회사 이름 또는 코드 입력 (예: 애플, TSLA)" style="flex:1">
+                                <button id="search-stock-btn" class="auth-btn" style="width:80px;">검색</button>
+                            </div>
+                            <div id="stock-search-results" class="search-results-box hidden" style="position: absolute; top: 100%; left: 0; right: 0; z-index: 100; background: #1e1e1e; border: 1px solid #333; border-radius: 8px; max-height: 300px; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5);"></div>
                         </div>
                         <!-- TradingView 차트 위젯 (높이를 직접 지정하여 꽉 채움) -->
                         <div id="tradingview_chart" style="height: 400px; border-radius: 10px; overflow: hidden; border: 1px solid #333;"></div>

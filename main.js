@@ -359,12 +359,28 @@ class EconomicSimulation {
         this.tvWidget = null;
         this.lastStockTotal = 0;
         
-        this.topStocks = [
-            { symbol: 'NASDAQ:AAPL', name: '애플' }, { symbol: 'NASDAQ:TSLA', name: '테슬라' },
-            { symbol: 'NASDAQ:NVDA', name: '엔비디아' }, { symbol: 'NASDAQ:MSFT', name: '마이크로소프트' },
-            { symbol: 'NASDAQ:AMZN', name: '아마존' }, { symbol: 'NASDAQ:GOOGL', name: '구글' },
-            { symbol: 'NASDAQ:META', name: '메타' }, { symbol: 'NASDAQ:NFLX', name: '넷플릭스' },
-            { symbol: 'BINANCE:BTCUSDT', name: '비트코인' }, { symbol: 'NYSE:DIS', name: '디즈니' }
+        // 검색용 종목 마스터 데이터
+        this.stockDictionary = [
+            { symbol: 'NASDAQ:AAPL', name: '애플', keywords: 'apple' },
+            { symbol: 'NASDAQ:TSLA', name: '테슬라', keywords: 'tesla' },
+            { symbol: 'NASDAQ:NVDA', name: '엔비디아', keywords: 'nvidia' },
+            { symbol: 'NASDAQ:MSFT', name: '마이크로소프트', keywords: 'microsoft' },
+            { symbol: 'NASDAQ:AMZN', name: '아마존', keywords: 'amazon' },
+            { symbol: 'NASDAQ:GOOGL', name: '구글', keywords: 'google alphabat 알파벳' },
+            { symbol: 'NASDAQ:META', name: '메타', keywords: 'meta facebook 페이스북' },
+            { symbol: 'NASDAQ:NFLX', name: '넷플릭스', keywords: 'netflix' },
+            { symbol: 'BINANCE:BTCUSDT', name: '비트코인', keywords: 'bitcoin btc' },
+            { symbol: 'BINANCE:ETHUSDT', name: '이더리움', keywords: 'ethereum eth' },
+            { symbol: 'BINANCE:SOLUSDT', name: '솔라나', keywords: 'solana sol' },
+            { symbol: 'BINANCE:XRPUSDT', name: '리플', keywords: 'ripple xrp' },
+            { symbol: 'BINANCE:DOGEUSDT', name: '도지코인', keywords: 'dogecoin doge' },
+            { symbol: 'NYSE:DIS', name: '디즈니', keywords: 'disney' },
+            { symbol: 'NYSE:KO', name: '코카콜라', keywords: 'cocacola coke' },
+            { symbol: 'NASDAQ:SBUX', name: '스타벅스', keywords: 'starbucks' },
+            { symbol: 'NYSE:NKE', name: '나이키', keywords: 'nike' },
+            { symbol: 'NASDAQ:TSM', name: 'TSMC', keywords: 'tsm 반도체' },
+            { symbol: 'KRX:005930', name: '삼성전자', keywords: 'samsung' },
+            { symbol: 'KRX:000660', name: 'SK하이닉스', keywords: 'sk hynix' }
         ];
     }
 
@@ -499,6 +515,18 @@ class EconomicSimulation {
     setupTradeListeners() {
         document.getElementById('stock-trade-amount')?.addEventListener('input', () => this.updateTradeSummary());
         document.getElementById('execute-trade-btn')?.addEventListener('click', () => this.executeTrade());
+        
+        // 검색창 실시간 연동
+        const searchInput = document.getElementById('stock-search-input');
+        searchInput?.addEventListener('input', () => this.searchStock());
+        searchInput?.addEventListener('focus', () => this.searchStock());
+        
+        // 외부 클릭 시 검색 결과창 닫기
+        window.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-results-box') && e.target.id !== 'stock-search-input') {
+                document.getElementById('stock-search-results')?.classList.add('hidden');
+            }
+        });
     }
 
     setTradeMode(mode) {
@@ -525,16 +553,63 @@ class EconomicSimulation {
     }
 
     async searchStock() {
-        let query = document.getElementById('stock-search-input').value.trim().toUpperCase();
-        if (!query) return;
+        const query = document.getElementById('stock-search-input').value.trim().toLowerCase();
+        const resultsBox = document.getElementById('stock-search-results');
         
-        // 심볼 형식 보정
-        if (!query.includes(':')) {
-            if (['BTC', 'ETH', 'SOL', 'XRP'].includes(query)) query = `BINANCE:${query}USDT`;
-            else query = `NASDAQ:${query}`;
+        if (!query) {
+            resultsBox.classList.add('hidden');
+            return;
         }
 
-        this.selectStock(query, query.split(':')[1]);
+        const matches = this.stockDictionary.filter(s => 
+            s.name.includes(query) || 
+            s.symbol.toLowerCase().includes(query) || 
+            s.keywords.includes(query)
+        );
+
+        if (matches.length > 0) {
+            resultsBox.innerHTML = '';
+            matches.forEach(s => {
+                const div = document.createElement('div');
+                div.style.padding = '12px 15px';
+                div.style.cursor = 'pointer';
+                div.style.borderBottom = '1px solid #333';
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.onmouseover = () => div.style.background = 'rgba(255,255,255,0.05)';
+                div.onmouseout = () => div.style.background = 'transparent';
+                
+                div.innerHTML = `
+                    <div>
+                        <strong style="color:var(--primary)">${s.name}</strong>
+                        <br><small style="color:#888;">${s.symbol}</small>
+                    </div>
+                    <span style="font-size:0.8rem; color:#666;">선택</span>
+                `;
+                div.onclick = () => {
+                    this.selectStock(s.symbol, s.name);
+                    document.getElementById('stock-search-input').value = s.name;
+                    resultsBox.classList.add('hidden');
+                };
+                resultsBox.appendChild(div);
+            });
+            resultsBox.classList.remove('hidden');
+        } else {
+            // 매칭되는 항목이 없어도 티커 검색은 허용
+            if (query.length > 2) {
+                resultsBox.innerHTML = `<div style="padding:15px; color:#888; text-align:center;">
+                    '${query.toUpperCase()}' 코드로 직접 검색<br>
+                    <button class="auth-btn" style="margin-top:10px; width:100%;" 
+                            onclick="window.simulation.selectStock('NASDAQ:${query.toUpperCase()}', '${query.toUpperCase()}'); document.getElementById('stock-search-results').classList.add('hidden');">
+                        NASDAQ 코드로 보기
+                    </button>
+                </div>`;
+                resultsBox.classList.remove('hidden');
+            } else {
+                resultsBox.classList.add('hidden');
+            }
+        }
     }
 
     async selectStock(symbol, name) {
@@ -558,9 +633,11 @@ class EconomicSimulation {
         const basePrices = { 
             AAPL: 245.50, TSLA: 412.30, NVDA: 135.20, MSFT: 425.10, 
             AMZN: 195.80, GOOGL: 188.40, META: 512.60, NFLX: 625.00, 
-            BTCUSDT: 102500.00, DIS: 115.40, SOLUSDT: 245.00, ETHUSDT: 3850.00 
+            BTCUSDT: 102500.00, DIS: 115.40, SOLUSDT: 245.00, ETHUSDT: 3850.00,
+            KO: 65.20, SBUX: 95.10, NKE: 105.30, COST: 750.40, TSM: 145.20,
+            '005930': 55.50, '000660': 125.20 
         };
-        const ticker = symbol.split(':')[1].replace('USDT', '');
+        const ticker = symbol.includes(':') ? symbol.split(':')[1].replace('USDT', '') : symbol;
         const base = basePrices[ticker] || 150.00;
         return Math.floor((base + (Math.random() - 0.5) * 0.5) * 100) / 100;
     }
