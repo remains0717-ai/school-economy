@@ -385,14 +385,14 @@ class EconomicSimulation {
         this.loanUnsub = null;
         this.currentStock = null;
         this.tradeMode = 'buy';
-        this.exchangeRate = 1350; // 고정 환율 시뮬레이션
+        this.exchangeRate = 1350;
         this.tvWidget = null;
         this.lastStockTotal = 0;
+        this.searchTimeout = null;
     }
 
     initTradingView(symbol = 'NASDAQ:AAPL') {
         if (typeof TradingView === 'undefined') return;
-        
         this.tvWidget = new TradingView.widget({
             "autosize": true,
             "symbol": symbol,
@@ -444,23 +444,9 @@ class EconomicSimulation {
             this.loadInventory();
             this.initTradingView();
             this.setupTradeListeners();
-            this.setupWidgetBridge();
         }
         
         if (this.currentStock) this.updateTradeSummary();
-    }
-
-    setupWidgetBridge() {
-        // TradingView 차트에서 심볼 변경 감지는 어렵지만, 
-        // 페이지의 클릭 등을 통해 동기화하는 브릿지 로직
-        window.addEventListener('message', (e) => {
-            if (e.data && e.data.name === 'tv-widget-symbol-change') {
-                this.selectStock(e.data.symbol, e.data.symbol.split(':')[1]);
-            }
-        });
-        
-        // 초기 심볼 설정
-        this.selectStock('NASDAQ:AAPL', '애플');
     }
 
     loadInventory() {
@@ -536,23 +522,27 @@ class EconomicSimulation {
         document.getElementById('stock-trade-amount')?.addEventListener('input', () => this.updateTradeSummary());
         document.getElementById('execute-trade-btn')?.addEventListener('click', () => this.executeTrade());
         
-        // 차트 수동 업데이트를 위한 타이머 (심볼 동기화용)
-        setInterval(() => {
-            const iframe = document.querySelector('#tradingview_chart iframe');
-            if (iframe && iframe.src) {
-                const url = new URL(iframe.src);
-                const symbol = url.searchParams.get('symbol');
-                if (symbol && (!this.currentStock || this.currentStock.symbol !== symbol)) {
-                    this.selectStock(symbol, symbol.split(':')[1]);
-                }
+        const searchInput = document.getElementById('stock-search-input');
+        const resultsBox = document.getElementById('stock-search-results');
+
+        searchInput?.addEventListener('input', () => {
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = setTimeout(() => this.searchStockAPI(), 300);
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-results-box') && e.target.id !== 'stock-search-input') {
+                if (resultsBox) resultsBox.classList.add('hidden');
             }
-        }, 1000);
+        });
+
+        if (!this.currentStock) this.selectStock('NASDAQ:AAPL', '애플');
     }
 
     setTradeMode(mode) {
         this.tradeMode = mode;
         const btn = document.getElementById('execute-trade-btn');
-        const tabs = document.querySelectorAll('.trade-tab-v2');
+        const tabs = document.querySelectorAll('.trade-tab');
         
         tabs.forEach(t => {
             t.classList.toggle('active', t.textContent === (mode === 'buy' ? '매수' : '매도'));
@@ -568,9 +558,55 @@ class EconomicSimulation {
         this.updateTradeSummary();
     }
 
+    async searchStockAPI() {
+        const query = document.getElementById('stock-search-input').value.trim();
+        const resultsBox = document.getElementById('stock-search-results');
+        if (!query || query.length < 1) { resultsBox?.classList.add('hidden'); return; }
+
+        try {
+            // TradingView의 공개 검색 API 활용 (CORS 우회를 위해 심볼 검색 최적화)
+            const response = await fetch(`https://symbol-search.tradingview.com/symbol_search/v3/?text=${encodeURIComponent(query)}&hl=1&lang=ko&domain=ko`);
+            const data = await response.json();
+            
+            if (data.symbols && data.symbols.length > 0) {
+                resultsBox.innerHTML = '';
+                data.symbols.slice(0, 10).forEach(s => {
+                    const tvSymbol = `${s.exchange}:${s.symbol}`;
+                    const div = document.createElement('div');
+                    div.style.padding = '12px 15px';
+                    div.style.cursor = 'pointer';
+                    div.style.borderBottom = '1px solid #333';
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.style.alignItems = 'center';
+                    div.onmouseover = () => div.style.background = 'rgba(255,255,255,0.05)';
+                    div.onmouseout = () => div.style.background = 'transparent';
+                    
+                    div.innerHTML = `
+                        <div>
+                            <strong style="color:var(--primary)">${s.description}</strong>
+                            <br><small style="color:#888;">${tvSymbol} (${s.type})</small>
+                        </div>
+                        <span style="font-size:0.8rem; color:#666;">${s.exchange}</span>
+                    `;
+                    div.onclick = () => {
+                        this.selectStock(tvSymbol, s.description);
+                        document.getElementById('stock-search-input').value = s.description;
+                        resultsBox.classList.add('hidden');
+                    };
+                    resultsBox.appendChild(div);
+                });
+                resultsBox.classList.remove('hidden');
+            }
+        } catch (e) {
+            console.error("Search API Error:", e);
+        }
+    }
+
     async selectStock(symbol, name) {
         const price = await this.getStockPrice(symbol);
         this.currentStock = { symbol, name, price };
+        this.updateTradingView(symbol);
         
         const nameEl = document.getElementById('selected-stock-name');
         const symbolEl = document.getElementById('selected-stock-symbol');
@@ -579,7 +615,6 @@ class EconomicSimulation {
         
         this.updateTradeSummary();
         
-        // 보유 현황 로드
         const portSnap = await db.collection('users').doc(this.user.uid).collection('portfolio').doc(symbol.replace(':', '_')).get();
         const myData = portSnap.exists ? portSnap.data() : { count: 0, avgPrice: 0 };
         document.getElementById('my-stock-count').textContent = `${myData.count} 주`;
@@ -587,7 +622,7 @@ class EconomicSimulation {
     }
 
     async getStockPrice(symbol) {
-        // 실제 API 연동이 없으므로 시연용 가격 생성 로직 유지 (심볼별 고정 베이스 가격)
+        // 실제 API 연동이 없으므로 시연용 가격 생성 로직 유지
         const basePrices = { 
             AAPL: 245.50, TSLA: 412.30, NVDA: 135.20, MSFT: 425.10, 
             AMZN: 195.80, GOOGL: 188.40, META: 512.60, NFLX: 625.00, 

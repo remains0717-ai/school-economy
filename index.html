@@ -251,92 +251,74 @@
 
             <!-- [5] 모의 주식 투자 -->
             <div id="stock-trading-view" class="view">
-                <div class="section-header">
-                    <h2>📈 실시간 주식 거래</h2>
-                    <p>전 세계 10만 개 이상의 종목을 한글로 검색하고 실시간 시세로 거래하세요.</p>
+                <!-- 상단 종목 검색바 -->
+                <div class="stock-search-bar-top card" style="margin-bottom: 5px; padding: 10px;">
+                    <div style="position: relative; display: flex; gap: 10px;">
+                        <input type="text" id="stock-search-input" placeholder="회사 이름 또는 코드 입력 (예: 삼성전자, 애플, TSLA, BTC)" style="flex: 1; font-size: 1.1rem; padding: 12px 20px;">
+                        <button id="search-stock-btn" class="auth-btn" style="width: 100px; margin: 0;">검색</button>
+                        <div id="stock-search-results" class="search-results-box hidden" style="position: absolute; top: 100%; left: 0; right: 110px; z-index: 100; background: #1e1e1e; border: 1px solid #333; border-radius: 8px; max-height: 300px; overflow-y: auto;"></div>
+                    </div>
                 </div>
 
-                <div class="stock-trading-layout">
-                    <!-- 왼쪽: 외부 심볼 검색 위젯 -->
-                    <div class="stock-search-sidebar">
-                        <div id="tv-search-widget-container" style="height: 600px;">
-                            <!-- TradingView Symbol Search Widget -->
-                            <div class="tradingview-widget-container">
-                                <div class="tradingview-widget-container__widget"></div>
-                                <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-symbol-search.js" async>
-                                {
-                                    "width": "100%",
-                                    "height": "100%",
-                                    "defaultSymbol": "NASDAQ:AAPL",
-                                    "locale": "ko",
-                                    "symbolSearchHighlight": true,
-                                    "headerConfig": {
-                                        "fixed": true
-                                    },
-                                    "colorTheme": "dark",
-                                    "showInput": true,
-                                    "container_id": "tv-search-widget-container"
-                                }
-                                </script>
-                            </div>
-                        </div>
+                <!-- 실시간 차트 -->
+                <div id="tradingview_chart" style="height: 480px; border: 1px solid #333; margin-bottom: 5px;"></div>
+
+                <!-- 가로형 주문 패널 (사용자 선호 너비 복구) -->
+                <div id="stock-detail-panel" class="trading-panel-horizontal" style="margin-top: 0;">
+                    <div class="trade-tabs-horizontal">
+                        <button class="trade-tab active" onclick="window.simulation.setTradeMode('buy')">매수</button>
+                        <button class="trade-tab" onclick="window.simulation.setTradeMode('sell')">매도</button>
                     </div>
+                    
+                    <div class="trade-content-horizontal">
+                        <!-- 종목 정보 -->
+                        <div class="trade-section info-section">
+                            <h3 id="selected-stock-name" style="margin:0; font-size:1.2rem;">종목을 선택하세요</h3>
+                            <div style="display:flex; align-items:baseline; gap:10px;">
+                                <span id="selected-stock-symbol" style="color:#888; font-weight:bold;">-</span>
+                                <span id="current-price-val" class="important-metric" style="font-size:1.5rem;">$0.00</span>
+                            </div>
+                            <p style="margin:5px 0 0 0; font-size:0.85rem; color:#888;">환산: ₩ <span id="krw-price-val">0</span></p>
+                        </div>
 
-                    <!-- 오른쪽: 차트 및 주문 패널 -->
-                    <div class="stock-main-content">
-                        <!-- 차트 영역 -->
-                        <div id="tradingview_chart" style="height: 450px; border-bottom: 1px solid #333;"></div>
-
-                        <!-- 주문 패널 -->
-                        <div id="stock-detail-panel" class="card trade-panel-v2" style="border:none; border-radius:0; margin:0; padding:20px;">
-                            <div class="trade-header-v2">
-                                <div class="selected-info">
-                                    <h3 id="selected-stock-name" style="margin:0;">애플</h3>
-                                    <span id="selected-stock-symbol" style="color:var(--primary); font-weight:bold;">NASDAQ:AAPL</span>
-                                </div>
-                                <div class="current-price-v2">
-                                    <div class="usd-price"><span id="current-price-val">$0.00</span></div>
-                                    <div class="krw-price">₩ <span id="krw-price-val">0</span></div>
+                        <!-- 주문 설정 -->
+                        <div class="trade-section order-section">
+                            <div class="input-group-horizontal">
+                                <label>주문 수량</label>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <input type="number" id="stock-trade-amount" value="1" min="1" style="width:100px;">
+                                    <span>주</span>
                                 </div>
                             </div>
-
-                            <div class="trade-body-v2">
-                                <div class="trade-tabs-v2">
-                                    <button class="trade-tab-v2 active" onclick="window.simulation.setTradeMode('buy')">매수</button>
-                                    <button class="trade-tab-v2" onclick="window.simulation.setTradeMode('sell')">매도</button>
+                            <div class="trade-summary-horizontal">
+                                <div class="summary-item">
+                                    <span class="label">총 금액</span>
+                                    <span id="order-total-price" class="value">₩ 0</span>
                                 </div>
-                                
-                                <div class="order-form-v2">
-                                    <div class="input-row">
-                                        <div class="input-group-v2">
-                                            <label>주문 수량</label>
-                                            <input type="number" id="stock-trade-amount" value="1" min="1">
-                                            <span class="unit">주</span>
-                                        </div>
-                                        <div class="holdings-info-v2">
-                                            <div class="info-item">보유: <span id="my-stock-count">0 주</span></div>
-                                            <div class="info-item">평단: <span id="my-avg-price">$0.00</span></div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="summary-row-v2">
-                                        <div class="summary-total">
-                                            <label>총 주문 금액</label>
-                                            <strong id="order-total-price">₩ 0</strong>
-                                        </div>
-                                        <div class="available-balance">
-                                            <span>주문 가능: </span>
-                                            <span id="trade-available-balance">₩ 0</span>
-                                        </div>
-                                    </div>
-                                    
-                                    <button id="execute-trade-btn" class="submit-btn trade-submit-buy">매수하기</button>
+                                <div class="summary-item">
+                                    <span class="label">가용 잔액</span>
+                                    <span id="trade-available-balance" class="value" style="color:#aaa;">₩ 0</span>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 보유 현황 및 실행 -->
+                        <div class="trade-section holdings-section">
+                            <div class="holdings-grid">
+                                <div class="holding-item">
+                                    <span class="label">보유</span>
+                                    <span id="my-stock-count" class="value" style="color:var(--secondary)">0 주</span>
+                                </div>
+                                <div class="holding-item">
+                                    <span class="label">평단</span>
+                                    <span id="my-avg-price" class="value">$0.00</span>
+                                </div>
+                            </div>
+                            <button id="execute-trade-btn" class="submit-btn trade-submit-buy" style="margin-top:10px;">매수하기</button>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
             <!-- [6] 투자 수익률 -->
             <div id="portfolio-view" class="view">
