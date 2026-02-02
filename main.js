@@ -167,6 +167,12 @@ class LogPanel extends HTMLElement {
 
 customElements.define('log-panel', LogPanel);
 
+// Global Error Logging
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+    console.error("Global Error: " + msg + " at " + url + ":" + lineNo);
+    return false;
+};
+
 // Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyBoVbtaw2BR29qyuFKPxBKVeEtkSLF49yg",
@@ -201,59 +207,68 @@ class AuthManager {
     }
 
     initEvents() {
-        document.getElementById('login-btn').addEventListener('click', () => this.openModal('login'));
-        document.getElementById('signup-btn').addEventListener('click', () => this.openModal('signup'));
-        document.querySelector('.close-modal').addEventListener('click', () => this.closeModal());
-        document.getElementById('logout-btn').addEventListener('click', () => this.logout());
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const closeModalBtn = document.querySelector('.close-modal');
+        const userDisplayName = document.getElementById('user-display-name');
 
-        // My Info events
-        document.getElementById('user-display-name').addEventListener('click', () => this.openMyInfo());
+        if (loginBtn) loginBtn.addEventListener('click', () => this.openModal('login'));
+        if (signupBtn) signupBtn.addEventListener('click', () => this.openModal('signup'));
+        if (closeModalBtn) closeModalBtn.addEventListener('click', () => this.closeModal());
+        if (logoutBtn) logoutBtn.addEventListener('click', () => this.logout());
+        if (userDisplayName) userDisplayName.addEventListener('click', () => this.openMyInfo());
+
         const closeMyInfoBtn = document.querySelector('.close-my-info');
         if (closeMyInfoBtn) {
             closeMyInfoBtn.addEventListener('click', () => {
-                document.getElementById('my-info-modal').style.display = 'none';
+                const modal = document.getElementById('my-info-modal');
+                if (modal) modal.style.display = 'none';
             });
         }
 
-        document.getElementById('signup-role').addEventListener('change', (e) => {
-            const emailInput = document.getElementById('signup-email');
-            const usernameContainer = document.getElementById('signup-username-container');
-            const usernameInput = document.getElementById('signup-username');
-            const classCodeContainer = document.getElementById('signup-class-code-container');
-            const classCodeInput = document.getElementById('signup-class-code');
+        const signupRole = document.getElementById('signup-role');
+        if (signupRole) {
+            signupRole.addEventListener('change', (e) => {
+                const emailInput = document.getElementById('signup-email');
+                const usernameContainer = document.getElementById('signup-username-container');
+                const classCodeContainer = document.getElementById('signup-class-code-container');
 
-            if (e.target.value === 'admin') {
-                emailInput.classList.remove('hidden');
-                emailInput.required = true;
-                usernameContainer.classList.add('hidden');
-                usernameInput.required = false;
-                classCodeContainer.classList.add('hidden');
-                classCodeInput.required = false;
-            } else {
-                emailInput.classList.add('hidden');
-                emailInput.required = false;
-                usernameContainer.classList.remove('hidden');
-                usernameInput.required = true;
-                classCodeContainer.classList.remove('hidden');
-                classCodeInput.required = true;
-            }
-        });
+                if (e.target.value === 'admin') {
+                    if (emailInput) { emailInput.classList.remove('hidden'); emailInput.required = true; }
+                    if (usernameContainer) usernameContainer.classList.add('hidden');
+                    if (classCodeContainer) classCodeContainer.classList.add('hidden');
+                } else {
+                    if (emailInput) { emailInput.classList.add('hidden'); emailInput.required = false; }
+                    if (usernameContainer) usernameContainer.classList.remove('hidden');
+                    if (classCodeContainer) classCodeContainer.classList.remove('hidden');
+                }
+            });
+        }
 
-        this.toggleLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            const isLogin = this.signupContainer.classList.contains('hidden');
-            this.switchMode(isLogin ? 'signup' : 'login');
-        });
+        if (this.toggleLink) {
+            this.toggleLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                const isLogin = this.signupContainer.classList.contains('hidden');
+                this.switchMode(isLogin ? 'signup' : 'login');
+            });
+        }
 
-        document.getElementById('login-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.login();
-        });
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.login();
+            });
+        }
 
-        document.getElementById('signup-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.signup();
-        });
+        const signupForm = document.getElementById('signup-form');
+        if (signupForm) {
+            signupForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.signup();
+            });
+        }
 
         window.onclick = (event) => {
             if (event.target == this.modal) this.closeModal();
@@ -262,48 +277,31 @@ class AuthManager {
         };
     }
 
-    openMyInfo() {
-        if (!this.currentUser) return;
-        
-        const myInfoModal = document.getElementById('my-info-modal');
-        document.getElementById('info-username').textContent = this.currentUser.username;
-        document.getElementById('info-role').textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
-        
-        const adminSection = document.getElementById('info-admin-section');
-        if (this.currentUser.role === 'admin') {
-            adminSection.classList.remove('hidden');
-            document.getElementById('info-email').textContent = auth.currentUser.email;
-            document.getElementById('info-class-code').textContent = this.currentUser.classCode || '발급되지 않음';
-        } else {
-            adminSection.classList.add('hidden');
-        }
-        
-        myInfoModal.style.display = 'block';
-    }
-
     listenToAuthChanges() {
         auth.onAuthStateChanged(async (user) => {
-            console.log("Auth State Changed. User:", user ? user.email : "Logged Out");
+            console.log("Auth Status Changed:", user ? user.email : "No User");
             if (user) {
+                // UI를 먼저 업데이트 (최소한 로그인 중임은 보여줌)
+                this.currentUser = { uid: user.uid, username: user.email.split('@')[0], role: 'loading' };
+                this.updateUI();
+
                 try {
                     const userDoc = await db.collection('users').doc(user.uid).get();
                     if (userDoc.exists) {
                         const userData = userDoc.data();
-                        console.log("User Data Found in Firestore:", userData);
                         this.currentUser = { 
                             uid: user.uid, 
                             username: userData.username, 
                             role: userData.role,
                             classCode: userData.classCode || null
                         };
-                        this.simulation.loadUserData(user.uid);
+                        console.log("User data loaded from Firestore:", this.currentUser);
+                        if (this.simulation) this.simulation.loadUserData(user.uid);
                     } else {
-                        console.error("Firestore에 사용자 문서가 없습니다! UID:", user.uid);
-                        this.currentUser = null;
+                        console.warn("User document not found. Might be a new user or legacy account.");
                     }
                 } catch (error) {
-                    console.error("사용자 데이터 로딩 오류:", error);
-                    this.currentUser = null;
+                    console.error("Firestore loading error:", error);
                 }
             } else {
                 this.currentUser = null;
@@ -313,71 +311,68 @@ class AuthManager {
         });
     }
 
-    openModal(mode) {
-        this.modal.style.display = 'block';
-        this.switchMode(mode);
-    }
+    updateUI() {
+        console.log("Executing updateUI. CurrentUser:", this.currentUser);
+        const els = {
+            loginBtn: document.getElementById('login-btn'),
+            signupBtn: document.getElementById('signup-btn'),
+            userInfo: document.getElementById('user-info'),
+            userDisplay: document.getElementById('user-display-name'),
+            roleBadge: document.getElementById('user-role-badge'),
+            simulationLink: document.getElementById('simulation-link'),
+            adminMenu: document.getElementById('admin-menu')
+        };
 
-    closeModal() {
-        if (this.modal) this.modal.style.display = 'none';
-        
-        const loginForm = document.getElementById('login-form');
-        const signupForm = document.getElementById('signup-form');
-        if (loginForm) loginForm.reset();
-        if (signupForm) signupForm.reset();
-
-        const signupEmail = document.getElementById('signup-email');
-        const signupUsernameContainer = document.getElementById('signup-username-container');
-        const classCodeDisplay = document.getElementById('class-code-display');
-        const classCodeContainer = document.getElementById('signup-class-code-container');
-
-        if (signupEmail) signupEmail.classList.add('hidden');
-        if (signupUsernameContainer) signupUsernameContainer.classList.remove('hidden');
-        if (classCodeDisplay) classCodeDisplay.classList.add('hidden');
-        if (classCodeContainer) classCodeContainer.classList.remove('hidden');
-    }
-
-    switchMode(mode) {
-        if (mode === 'login') {
-            this.loginContainer.classList.remove('hidden');
-            this.signupContainer.classList.add('hidden');
-            this.toggleText.innerHTML = `계정이 없으신가요? <a href="#" id="toggle-to-signup">회원가입</a>`;
-        } else {
-            this.loginContainer.classList.add('hidden');
-            this.signupContainer.classList.remove('hidden');
-            this.toggleText.innerHTML = `이미 계정이 있으신가요? <a href="#" id="toggle-to-login">로그인</a>`;
+        if (this.currentUser) {
+            if (els.loginBtn) els.loginBtn.classList.add('hidden');
+            if (els.signupBtn) els.signupBtn.classList.add('hidden');
+            if (els.userInfo) els.userInfo.classList.remove('hidden');
             
-            document.getElementById('signup-class-code-container').classList.remove('hidden');
-            document.getElementById('signup-username-container').classList.remove('hidden');
-            document.getElementById('signup-email').classList.add('hidden');
-            document.getElementById('signup-role').value = 'student';
-        }
-        
-        const newToggle = mode === 'login' ? document.getElementById('toggle-to-signup') : document.getElementById('toggle-to-login');
-        if (newToggle) {
-            newToggle.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.switchMode(mode === 'login' ? 'signup' : 'login');
-            });
+            if (els.userDisplay) {
+                els.userDisplay.textContent = this.currentUser.username;
+                if (this.currentUser.classCode) els.userDisplay.textContent += ` [${this.currentUser.classCode}]`;
+            }
+
+            if (els.roleBadge) {
+                els.roleBadge.textContent = this.currentUser.role === 'admin' ? '관리자' : (this.currentUser.role === 'loading' ? '로딩중...' : '학생');
+                els.roleBadge.style.color = this.currentUser.role === 'admin' ? '#ff4d4d' : '#00ffdd';
+            }
+            
+            if (this.currentUser.role === 'admin') {
+                if (els.simulationLink) els.simulationLink.classList.remove('hidden');
+                if (els.adminMenu) els.adminMenu.classList.remove('hidden');
+                const mgmtCode = document.getElementById('mgmt-class-code');
+                if (mgmtCode) mgmtCode.textContent = this.currentUser.classCode;
+                this.loadStudentList();
+            } else {
+                if (els.simulationLink) els.simulationLink.classList.add('hidden');
+                if (els.adminMenu) els.adminMenu.classList.add('hidden');
+            }
+        } else {
+            if (els.loginBtn) els.loginBtn.classList.remove('hidden');
+            if (els.signupBtn) els.signupBtn.classList.remove('hidden');
+            if (els.userInfo) els.userInfo.classList.add('hidden');
+            if (els.simulationLink) els.simulationLink.classList.add('hidden');
+            if (els.adminMenu) els.adminMenu.classList.add('hidden');
         }
     }
 
     async login() {
-        const username = document.getElementById('login-username').value.trim();
-        const pass = document.getElementById('login-password').value;
-        
+        const usernameInput = document.getElementById('login-username');
+        const passwordInput = document.getElementById('login-password');
+        if (!usernameInput || !passwordInput) return;
+
+        const username = usernameInput.value.trim();
+        const pass = passwordInput.value;
         const email = (username.includes('@')) ? username : `${username.toLowerCase()}@school-economy.local`;
 
         try {
             await auth.signInWithEmailAndPassword(email, pass);
             this.closeModal();
-            // 캐시 문제를 해결하기 위해 로그인 성공 시 페이지 강제 새로고침
-            location.reload(); 
+            // Force reload to clear any cache/state
+            window.location.reload();
         } catch (error) {
-            console.error("Login Error:", error.code);
-            let msg = '아이디 또는 비밀번호가 틀렸습니다.';
-            if (error.code === 'auth/too-many-requests') msg = '로그인 시도가 너무 많습니다. 나중에 다시 해주세요.';
-            alert(msg);
+            alert('아이디 또는 비밀번호가 틀렸습니다.');
         }
     }
 
