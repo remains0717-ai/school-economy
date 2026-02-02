@@ -1,338 +1,105 @@
+:root {
+    --primary: #00ffdd;
+    --bg-dark: #121212;
+    --bg-panel: #1e1e1e;
+    --border: #333;
+    --text: #efefef;
+    --text-muted: #888;
+    --danger: #ff4d4d;
+}
+
 body {
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background-color: #121212;
-    color: #efefef;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text);
     margin: 0;
-    padding: 0;
-    display: block;
-    font-size: 16px; /* 본문 글자 크기 상향 */
+    font-size: 16px;
     line-height: 1.6;
 }
 
-/* Typography 강화 */
-h1, h2, h3 { color: #00ffdd; }
-h2 { font-size: 1.8rem; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+/* Typography */
+h1, h2, h3 { color: var(--primary); margin-top: 0; }
+.important-metric { font-size: 24px; font-weight: 800; color: var(--primary); text-shadow: 0 0 10px rgba(0, 255, 221, 0.3); }
 
-.important-metric {
-    font-size: 24px !important;
-    font-weight: 800;
-    color: #00ffdd;
-    text-shadow: 0 0 10px rgba(0, 255, 221, 0.3);
-}
-
+/* Header */
 header {
-    width: 100%;
     background-color: #0d0d0d;
     padding: 15px 0;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 1000;
 }
+.header-container { display: flex; justify-content: space-between; align-items: center; max-width: 1400px; margin: 0 auto; padding: 0 30px; }
 
-.header-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 30px;
-}
+/* Layout */
+.container { display: flex; max-width: 1400px; margin: 0 auto; min-height: calc(100vh - 70px); }
 
-h1 {
-    font-size: 1.6rem;
-    letter-spacing: -1px;
-    text-shadow: 0 0 15px #00ffdd;
-}
-
-/* 사이드바 아코디언 스타일 */
-.container {
-    display: flex;
-    max-width: 1400px;
-    margin: 0 auto;
-    min-height: calc(100vh - 70px);
-}
-
-.sidebar {
-    width: 260px;
-    background-color: #1a1a1a;
-    padding: 20px 0;
-    border-right: 1px solid #333;
-}
-
+/* Sidebar Accordion */
+.sidebar { width: 260px; background-color: #1a1a1a; padding: 20px 0; border-right: 1px solid var(--border); }
 .sidebar ul { list-style: none; padding: 0; margin: 0; }
-
-.menu-group {
-    border-top: 1px solid #333;
-    margin-top: 15px;
-    padding-top: 15px;
-}
-
 .sidebar a {
-    color: #bbb;
+    color: var(--text-muted);
     text-decoration: none;
     padding: 12px 25px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: all 0.2s ease;
     border-left: 4px solid transparent;
+    transition: 0.2s;
 }
+.sidebar a:hover, .sidebar a.active { background-color: #252525; color: white; border-left-color: var(--primary); }
+.sidebar a.active { font-weight: bold; color: var(--primary); }
 
-.sidebar a:hover {
-    background-color: #252525;
-    color: #fff;
+.sub-menu { max-height: 0; overflow: hidden; transition: 0.3s ease-out; background-color: #151515; }
+.menu-item.open .sub-menu { max-height: 500px; }
+.sub-menu a { padding-left: 45px; font-size: 0.95rem; }
+
+.chevron { width: 8px; height: 8px; border-right: 2px solid #666; border-bottom: 2px solid #666; transform: rotate(-45deg); transition: 0.3s; }
+.menu-item.open .chevron { transform: rotate(45deg); }
+.menu-group { border-top: 1px solid var(--border); margin-top: 15px; padding-top: 10px; }
+
+/* Modals */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0; top: 0; width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.85);
+    backdrop-filter: blur(5px);
 }
-
-.sidebar a.active {
-    background-color: rgba(0, 255, 221, 0.1);
-    color: #00ffdd;
-    border-left: 4px solid #00ffdd;
-    font-weight: bold;
+.modal-content {
+    background-color: #2b2b2b;
+    margin: 10% auto;
+    padding: 35px;
+    border: 1px solid var(--primary);
+    width: 380px;
+    border-radius: 15px;
+    position: relative;
+    box-shadow: 0 0 30px rgba(0, 255, 221, 0.2);
 }
+.close-modal, .close-my-info, .close-modify-asset, .close-activity-detail { color: #888; float: right; cursor: pointer; font-size: 28px; }
 
-/* 하위 메뉴 슬라이드 애니메이션 */
-.sub-menu {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease-out;
-    background-color: #151515;
-}
+/* Content Area */
+.content-area { flex-grow: 1; padding: 40px; background-color: var(--bg-dark); }
+.view { display: none; }
+.view.active { display: block; }
 
-.menu-item.open .sub-menu {
-    max-height: 500px;
-}
-
-.sub-menu a {
-    padding-left: 45px;
-    font-size: 0.95rem;
-}
-
-/* 셰브론 화살표 아이콘 */
-.chevron {
-    width: 10px;
-    height: 10px;
-    border-right: 2px solid #666;
-    border-bottom: 2px solid #666;
-    transform: rotate(-45deg);
-    transition: transform 0.3s ease;
-}
-
-.menu-item.open .chevron {
-    transform: rotate(45deg);
-}
-
-/* 테이블 및 리스트 가시성 강화 */
-.content-area {
-    flex-grow: 1;
-    padding: 40px;
-    background-color: #121212;
-}
-
-table {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0 8px; /* 행 사이 간격 */
-    margin-top: 20px;
-}
-
-th {
-    padding: 15px;
-    color: #888;
-    font-weight: 500;
-    text-align: left;
-    text-transform: uppercase;
-    font-size: 0.85rem;
-    letter-spacing: 1px;
-}
-
-td {
-    padding: 18px 15px; /* 행간 확대 */
-    background-color: #1e1e1e;
-    border-top: 1px solid #2a2a2a;
-    border-bottom: 1px solid #2a2a2a;
-}
-
+/* Tables */
+table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin-top: 20px; }
+th { padding: 15px; color: var(--text-muted); text-align: left; font-size: 0.85rem; }
+td { padding: 18px 15px; background-color: var(--bg-panel); border-top: 1px solid #2a2a2a; border-bottom: 1px solid #2a2a2a; }
 td:first-child { border-left: 1px solid #2a2a2a; border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
 td:last-child { border-right: 1px solid #2a2a2a; border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
 
-/* ... (나머지 버튼 및 모달 스타일은 유지하거나 위 시스템에 맞춰 자동 조절됨) */
+/* Buttons & Inputs */
+.auth-btn { padding: 8px 15px; background: transparent; border: 1px solid var(--primary); color: var(--primary); cursor: pointer; border-radius: 5px; }
+.auth-btn:hover { background: var(--primary); color: #1a1a1a; }
+.submit-btn { width: 100%; padding: 12px; background: var(--primary); border: none; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; }
+input, select { background: #1a1a1a; border: 1px solid var(--border); color: white; padding: 12px; border-radius: 8px; width: 100%; box-sizing: border-box; }
 
-/* Stock Trading UI */
-.stock-market-container {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.stock-search {
-    display: flex;
-    gap: 10px;
-}
-
-.stock-search input {
-    flex-grow: 1;
-    background: #1a1a1a;
-    border: 1px solid #444;
-    padding: 10px;
-    border-radius: 5px;
-    color: white;
-}
-
-#stock-chart-container {
-    width: 100%;
-    height: 400px;
-    background: #1a1a1a;
-    border: 1px solid #444;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #666;
-}
-
-.trading-panel {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #1a1a1a;
-    padding: 20px;
-    border-radius: 8px;
-    border: 1px solid #00ffdd;
-}
-
-.trade-controls {
-    display: flex;
-    gap: 10px;
-}
-
-.trade-controls input {
-    width: 80px;
-    background: #2b2b2b;
-    border: 1px solid #444;
-    padding: 10px;
-    border-radius: 5px;
-    color: white;
-}
-
-.trade-controls button.buy {
-    background-color: #ff4d4d;
-    color: white;
-}
-
-.trade-controls button.sell {
-    background-color: #4d79ff;
-    color: white;
-}
-
-/* Portfolio Table */
-#portfolio-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-
-#portfolio-table th, #portfolio-table td {
-    padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid #444;
-}
-
-#portfolio-table th {
-    color: #00ffdd;
-    text-transform: uppercase;
-    font-size: 0.9em;
-}
-
-/* Bank UI Styles */
-.bank-container {
-    display: flex;
-    flex-direction: column;
-    gap: 25px;
-    margin-top: 20px;
-}
-
-.bank-info-card {
-    background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
-    padding: 30px;
-    border-radius: 12px;
-    border: 1px solid #444;
-    text-align: center;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.balance-display h3 {
-    color: #888;
-    font-size: 0.9em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-}
-
-.balance-display p {
-    font-size: 2.5em;
-    font-weight: bold;
-    color: #00ffdd;
-    margin: 10px 0;
-    text-shadow: 0 0 15px rgba(0, 255, 221, 0.3);
-}
-
-.balance-display small {
-    color: #666;
-}
-
-.bank-controls {
-    background-color: #1a1a1a;
-    padding: 25px;
-    border-radius: 12px;
-    border: 1px solid #444;
-}
-
-.bank-controls .input-group {
-    margin-bottom: 20px;
-}
-
-.bank-controls label {
-    display: block;
-    margin-bottom: 10px;
-    color: #888;
-}
-
-.bank-controls input {
-    width: 100%;
-    background: #2b2b2b;
-    border: 1px solid #444;
-    padding: 15px;
-    border-radius: 8px;
-    color: white;
-    font-size: 1.1em;
-    box-sizing: border-box;
-}
-
-.bank-controls .button-group {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-}
-
-.bank-controls button {
-    padding: 15px;
-    font-size: 1em;
-}
-
-.bank-controls button.deposit {
-    background-color: #00ffdd;
-    color: #1a1a1a;
-}
-
-.bank-controls button.withdraw {
-    background-color: transparent;
-    border: 2px solid #00ffdd;
-    color: #00ffdd;
-}
-
-.bank-controls button.withdraw:hover {
-    background-color: rgba(0, 255, 221, 0.1);
-}
-
-.up-trend { color: #ff4d4d; }
-.down-trend { color: #4d79ff; }
+.hidden { display: none !important; }
+.guest-msg { text-align: center; padding: 100px 0; border: 2px dashed #333; border-radius: 20px; }
+.log-box { background: #1a1a1a; padding: 20px; border-radius: 10px; border: 1px solid var(--border); height: 500px; overflow-y: auto; }
+.code-box { margin-top: 15px; padding: 15px; background: #1a1a1a; border: 1px dashed var(--primary); border-radius: 8px; text-align: center; }
+.code-box strong { font-size: 1.4em; color: var(--primary); }
