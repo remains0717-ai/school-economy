@@ -37,6 +37,12 @@ class AuthManager {
             this.updateSelectedCount();
         });
 
+        document.getElementById('selectAllJobs')?.addEventListener('change', (e) => {
+            const checkboxes = document.querySelectorAll('.job-checkbox');
+            checkboxes.forEach(cb => cb.checked = e.target.checked);
+            this.updateSelectedJobCount();
+        });
+
         window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.style.display = 'none'; };
     }
 
@@ -132,6 +138,23 @@ class AuthManager {
         const code = window.userState.currentUser?.classCode;
         if (!code) return;
 
+        // 학생 목록 (승인 관리용)
+        db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(snap => {
+            const body = document.getElementById('student-list-body');
+            if(!body) return;
+            body.innerHTML = '';
+            snap.forEach(doc => {
+                const d = doc.data();
+                const tr = document.createElement('tr');
+                const statusText = d.isAuthorized ? '<span style="color:var(--primary)">승인됨</span>' : '<span style="color:var(--danger)">미승인</span>';
+                const actionBtn = d.isAuthorized 
+                    ? `<button onclick="window.toggleApproval('${doc.id}', false)" style="background:var(--danger)">승인 취소</button>`
+                    : `<button onclick="window.toggleApproval('${doc.id}', true)" style="background:var(--primary); color:#1a1a1a;">승인 하기</button>`;
+                tr.innerHTML = `<td>${d.username}</td><td>${statusText}</td><td>${actionBtn}</td>`;
+                body.appendChild(tr);
+            });
+        });
+
         // 자산 현황 테이블
         db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(snap => {
             const body = document.getElementById('asset-mgmt-body');
@@ -142,6 +165,29 @@ class AuthManager {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td><input type="checkbox" class="student-checkbox" value="${doc.id}"></td><td>${d.nickname||d.username}</td><td style="color:var(--primary)">₩${(d.balance||0).toLocaleString()}</td><td>₩0</td><td class="important-metric">₩${(d.balance||0).toLocaleString()}</td><td><button onclick="window.openModifyModal('${doc.id}','${d.username}',${d.balance||0})">수정</button></td>`;
                 body.appendChild(tr);
+                // 체크박스 이벤트 리스너 추가 (동적 생성 대응)
+                tr.querySelector('.student-checkbox').addEventListener('change', () => this.updateSelectedCount());
+            });
+        });
+
+        // 직업 관리 테이블
+        db.collection('users').where('adminCode','==',code).where('role','==','student').onSnapshot(snap => {
+            const body = document.getElementById('job-mgmt-body');
+            if(!body) return;
+            body.innerHTML = '';
+            snap.forEach(doc => {
+                const d = doc.data();
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="job-checkbox" value="${doc.id}" data-salary="${d.salary||0}"></td>
+                    <td>${d.nickname||d.username}</td>
+                    <td><input type="text" value="${d.job||''}" placeholder="직업명" class="job-input" style="width:100px;"></td>
+                    <td><input type="number" value="${d.salary||0}" placeholder="급여" class="salary-input" style="width:100px;"></td>
+                    <td><button onclick="window.updateJobInfo('${doc.id}', this)">저장</button></td>
+                `;
+                body.appendChild(tr);
+                // 체크박스 이벤트 리스너 추가
+                tr.querySelector('.job-checkbox').addEventListener('change', () => this.updateSelectedJobCount());
             });
         });
 
@@ -162,6 +208,13 @@ class AuthManager {
         const el = document.getElementById('selected-count');
         if (el) el.textContent = count;
     }
+
+    updateSelectedJobCount() {
+        const count = document.querySelectorAll('.job-checkbox:checked').length;
+        const el = document.getElementById('selected-job-count');
+        if (el) el.textContent = count;
+    }
+
 
     async signup() {
         const role = document.getElementById('signup-role').value;
@@ -422,6 +475,88 @@ function setupNavigation() {
 
 window.buyItem = (id, name, price) => window.simulation.buyItem(id, name, price);
 window.updateStudentInfo = async (uid, data) => { await db.collection('users').doc(uid).update(data); };
+window.toggleApproval = async (uid, status) => {
+    try {
+        await db.collection('users').doc(uid).update({ isAuthorized: status });
+        alert(status ? "승인되었습니다." : "승인이 취소되었습니다.");
+    } catch (err) {
+        alert("처리 실패: " + err.message);
+    }
+};
+
+window.updateJobInfo = async (uid, btn) => {
+    const row = btn.closest('tr');
+    const job = row.querySelector('.job-input').value;
+    const salary = parseInt(row.querySelector('.salary-input').value) || 0;
+    try {
+        await db.collection('users').doc(uid).update({ job, salary });
+        alert("저장되었습니다.");
+    } catch (err) {
+        alert("저장 실패: " + err.message);
+    }
+};
+
+window.sendBulkSalaries = async () => {
+    const checkboxes = document.querySelectorAll('.job-checkbox:checked');
+    if (checkboxes.length === 0) return alert("급여를 보낼 학생을 선택해 주세요.");
+
+    const classCode = window.userState.currentUser.classCode;
+    const classData = window.userState.classData;
+    const treasury = classData.treasury || 0;
+    
+    let totalSalary = 0;
+    const students = [];
+    checkboxes.forEach(cb => {
+        const row = cb.closest('tr');
+        const salary = parseInt(row.querySelector('.salary-input').value) || 0;
+        totalSalary += salary;
+        students.push({ uid: cb.value, salary: salary });
+    });
+
+    if (totalSalary === 0) return alert("선택된 학생들의 급여가 모두 0원입니다.");
+
+    let useBond = false;
+    if (treasury < totalSalary) {
+        if (!confirm(`국고가 부족합니다 (잔액: ₩${treasury.toLocaleString()} / 필요: ₩${totalSalary.toLocaleString()})\n부족분 ₩${(totalSalary - treasury).toLocaleString()}을 국채 발행으로 충당하시겠습니까?`)) return;
+        useBond = true;
+    } else {
+        if (!confirm(`${students.length}명에게 총 ₩${totalSalary.toLocaleString()}의 급여를 지급하시겠습니까?`)) return;
+    }
+
+    try {
+        const batch = db.batch();
+        const classRef = db.collection('classes').doc(classCode);
+
+        students.forEach(s => {
+            if (s.salary > 0) {
+                const userRef = db.collection('users').doc(s.uid);
+                batch.update(userRef, { balance: firebase.firestore.FieldValue.increment(s.salary) });
+                
+                const logRef = db.collection('class_activities').doc();
+                batch.set(logRef, {
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    userUid: s.uid, userName: "선택된 학생", type: 'SALARY_PAYMENT', amount: s.salary,
+                    description: `정기 급여 지급 (${useBond ? '국채 발행' : '국고 지출'})`,
+                    classCode: classCode
+                });
+            }
+        });
+
+        const newTreasury = useBond ? 0 : treasury - totalSalary;
+        const addedDebt = useBond ? totalSalary - treasury : 0;
+        
+        batch.update(classRef, { 
+            treasury: newTreasury, 
+            debt: firebase.firestore.FieldValue.increment(addedDebt) 
+        });
+
+        await batch.commit();
+        alert(`급여 지급 완료! ${useBond ? '부족분만큼 국채가 발행되었습니다.' : '국고에서 정상 차감되었습니다.'}`);
+    } catch (err) {
+        alert("급여 지급 실패: " + err.message);
+    }
+};
+
 window.toggleStudentAuth = async (uid, s) => { await db.collection('users').doc(uid).update({isAuthorized:s}); };
 window.openModifyModal = (uid, name, balance) => {
     document.getElementById('modify-target-name').textContent = name;

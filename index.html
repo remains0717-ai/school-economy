@@ -106,6 +106,7 @@
                     <a href="#" id="class-mgmt-link" class="parent-link" style="color:#ff4d4d"><span>학급 운영</span><span class="chevron"></span></a>
                     <ul class="sub-menu">
                         <li><a href="#" id="account-mgmt-link">학생 관리</a></li>
+                        <li><a href="#" id="job-mgmt-link">직업 관리</a></li>
                         <li><a href="#" id="asset-mgmt-link">자산 관리</a></li>
                         <li><a href="#" id="treasury-link">학급 국고</a></li>
                         <li><a href="#" id="db-mgmt-link">데이터베이스 로그</a></li>
@@ -220,7 +221,32 @@
             <div id="account-mgmt-view" class="view">
                 <h2>학급 학생 관리</h2>
                 <p>내 학급 코드: <strong id="mgmt-class-code" class="important-metric"></strong></p>
-                <table><thead><tr><th>아이디</th><th>실명/직업</th><th>권한</th><th>관리</th></tr></thead><tbody id="student-list-body"></tbody></table>
+                <table><thead><tr><th>아이디</th><th>상태</th><th>승인 관리</th></tr></thead><tbody id="student-list-body"></tbody></table>
+            </div>
+
+            <!-- [신설] 직업 관리 (관리자) -->
+            <div id="job-mgmt-view" class="view">
+                <h2>직업 및 급여 관리</h2>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllJobs"></th>
+                                <th>학생명</th>
+                                <th>직업</th>
+                                <th>급여 (₩)</th>
+                                <th>설정</th>
+                            </tr>
+                        </thead>
+                        <tbody id="job-mgmt-body"></tbody>
+                    </table>
+                </div>
+                <div id="salary-action-bar" class="asset-status" style="border-color:var(--primary); margin-top:20px; display:flex; align-items:center; gap:20px; padding:15px;">
+                    <div style="flex:1">
+                        <span id="selected-job-count" style="color:var(--primary); font-weight:bold;">0</span>명 선택됨
+                    </div>
+                    <button onclick="window.sendBulkSalaries()" class="auth-btn" style="background:var(--primary); color:#1a1a1a;">선택된 학생에게 급여 보내기</button>
+                </div>
             </div>
 
             <!-- [9] 자산 관리 (관리자 개편) -->
@@ -288,7 +314,6 @@
             </div>
 
             <div id="db-mgmt-view" class="view"><h2>전체 활동 데이터베이스</h2><div class="log-box" style="height:500px;"><ul id="class-logs"></ul></div></div>
-            <div id="job-mgmt-view" class="view"><h2>직업 관리</h2><p>학급 운영 메뉴에서 설정하세요.</p></div>
             <div id="stats-mgmt-view" class="view"><h2>통계 관리</h2><p>준비 중입니다.</p></div>
             <div id="import-export-view" class="view"><h2>가져오기/내보내기</h2><p>준비 중입니다.</p></div>
         </main>

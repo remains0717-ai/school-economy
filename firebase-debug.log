@@ -222,3 +222,135 @@
 [error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
 [debug] [2026-02-02T04:17:56.329Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
 [debug] [2026-02-02T04:17:56.329Z] > authorizing via signed-in user (remains0717@gmail.com)
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-02T08:48:51.652Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-02T08:48:51.683Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-02T08:48:57.563Z] Running auto auth
+[debug] [2026-02-02T08:48:57.570Z] Running auto auth
+[debug] [2026-02-02T08:48:57.696Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:57.707Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo [none]
+[debug] [2026-02-02T08:48:58.077Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.082Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo [none]
+[debug] [2026-02-02T08:48:58.405Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo 200
+[debug] [2026-02-02T08:48:58.405Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo {"name":"projects/school-economydata/billingInfo","projectId":"school-economydata","billingAccountName":"","billingEnabled":false}
+[debug] [2026-02-02T08:48:58.456Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.465Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.469Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.470Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.478Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.479Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.570Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.570Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:58.571Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/storage.googleapis.com [none]
+[debug] [2026-02-02T08:48:58.571Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/storage.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:58.574Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebasedataconnect.googleapis.com [none]
+[debug] [2026-02-02T08:48:58.575Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebasedataconnect.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:58.578Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/identitytoolkit.googleapis.com [none]
+[debug] [2026-02-02T08:48:58.579Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/identitytoolkit.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:58.585Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/fcm.googleapis.com [none]
+[debug] [2026-02-02T08:48:58.589Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/fcm.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:58.606Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-02-02T08:48:58.606Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/cloudfunctions.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:58.615Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseremoteconfig.googleapis.com [none]
+[debug] [2026-02-02T08:48:58.615Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseremoteconfig.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:58.631Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseapphosting.googleapis.com [none]
+[debug] [2026-02-02T08:48:58.631Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseapphosting.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:58.652Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseio.com [none]
+[debug] [2026-02-02T08:48:58.653Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseio.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.170Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo 200
+[debug] [2026-02-02T08:48:59.170Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo {"name":"projects/school-economydata/billingInfo","projectId":"school-economydata","billingAccountName":"","billingEnabled":false}
+[debug] [2026-02-02T08:48:59.171Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:59.178Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:59.179Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:59.185Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:59.186Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:59.186Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:59.235Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:59.247Z] No OAuth tokens found
+[debug] [2026-02-02T08:48:59.248Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/storage.googleapis.com [none]
+[debug] [2026-02-02T08:48:59.248Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/storage.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.263Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebasedataconnect.googleapis.com [none]
+[debug] [2026-02-02T08:48:59.263Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebasedataconnect.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.281Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/identitytoolkit.googleapis.com [none]
+[debug] [2026-02-02T08:48:59.281Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/identitytoolkit.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.292Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/fcm.googleapis.com [none]
+[debug] [2026-02-02T08:48:59.292Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/fcm.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.314Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-02-02T08:48:59.314Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/cloudfunctions.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.326Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseremoteconfig.googleapis.com [none]
+[debug] [2026-02-02T08:48:59.335Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseremoteconfig.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.347Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseapphosting.googleapis.com [none]
+[debug] [2026-02-02T08:48:59.347Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseapphosting.googleapis.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.367Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseio.com [none]
+[debug] [2026-02-02T08:48:59.367Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseio.com  x-goog-user-project=school-economydata
+[debug] [2026-02-02T08:48:59.809Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/storage.googleapis.com 200
+[debug] [2026-02-02T08:48:59.819Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/storage.googleapis.com [omitted]
+[debug] [2026-02-02T08:48:59.870Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseio.com 403
+[debug] [2026-02-02T08:48:59.870Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseio.com [omitted]
+[debug] [2026-02-02T08:48:59.893Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebasedataconnect.googleapis.com 200
+[debug] [2026-02-02T08:48:59.894Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebasedataconnect.googleapis.com [omitted]
+[debug] [2026-02-02T08:48:59.946Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/fcm.googleapis.com 200
+[debug] [2026-02-02T08:48:59.951Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/fcm.googleapis.com [omitted]
+[debug] [2026-02-02T08:48:59.971Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseapphosting.googleapis.com 200
+[debug] [2026-02-02T08:48:59.972Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseapphosting.googleapis.com [omitted]
+[debug] [2026-02-02T08:48:59.975Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/identitytoolkit.googleapis.com 200
+[debug] [2026-02-02T08:48:59.975Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/identitytoolkit.googleapis.com [omitted]
+[debug] [2026-02-02T08:48:59.995Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/cloudfunctions.googleapis.com 200
+[debug] [2026-02-02T08:48:59.996Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/cloudfunctions.googleapis.com [omitted]
+[debug] [2026-02-02T08:48:59.996Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseremoteconfig.googleapis.com 200
+[debug] [2026-02-02T08:48:59.996Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseremoteconfig.googleapis.com [omitted]
+[debug] [2026-02-02T08:49:00.502Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/storage.googleapis.com 200
+[debug] [2026-02-02T08:49:00.507Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/storage.googleapis.com [omitted]
+[debug] [2026-02-02T08:49:00.545Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebasedataconnect.googleapis.com 200
+[debug] [2026-02-02T08:49:00.545Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebasedataconnect.googleapis.com [omitted]
+[debug] [2026-02-02T08:49:00.593Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/fcm.googleapis.com 200
+[debug] [2026-02-02T08:49:00.593Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/fcm.googleapis.com [omitted]
+[debug] [2026-02-02T08:49:00.610Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/identitytoolkit.googleapis.com 200
+[debug] [2026-02-02T08:49:00.610Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/identitytoolkit.googleapis.com [omitted]
+[debug] [2026-02-02T08:49:00.643Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/cloudfunctions.googleapis.com 200
+[debug] [2026-02-02T08:49:00.644Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/cloudfunctions.googleapis.com [omitted]
+[debug] [2026-02-02T08:49:00.653Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseapphosting.googleapis.com 200
+[debug] [2026-02-02T08:49:00.653Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseapphosting.googleapis.com [omitted]
+[debug] [2026-02-02T08:49:00.662Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseio.com 403
+[debug] [2026-02-02T08:49:00.663Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseio.com [omitted]
+[debug] [2026-02-02T08:49:00.671Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseremoteconfig.googleapis.com 200
+[debug] [2026-02-02T08:49:00.671Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/school-economydata/services/firebaseremoteconfig.googleapis.com [omitted]
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-02T08:49:00.694Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-02T08:49:00.695Z] > authorizing via signed-in user (remains0717@gmail.com)
+[debug] [2026-02-02T08:49:00.695Z] No OAuth tokens found
+[debug] [2026-02-02T08:49:00.696Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo [none]
+[debug] [2026-02-02T08:49:01.693Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo 200
+[debug] [2026-02-02T08:49:01.694Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo {"name":"projects/school-economydata/billingInfo","projectId":"school-economydata","billingAccountName":"","billingEnabled":false}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-02T08:49:01.703Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-02T08:49:01.709Z] > authorizing via signed-in user (remains0717@gmail.com)
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-02T08:49:01.761Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-02T08:49:01.761Z] > authorizing via signed-in user (remains0717@gmail.com)
+[debug] [2026-02-02T08:49:01.762Z] No OAuth tokens found
+[debug] [2026-02-02T08:49:01.762Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo [none]
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-02T08:49:01.782Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-02T08:49:01.784Z] > authorizing via signed-in user (remains0717@gmail.com)
+[debug] [2026-02-02T08:49:01.785Z] No OAuth tokens found
+[debug] [2026-02-02T08:49:01.785Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo [none]
+[debug] [2026-02-02T08:49:01.995Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo 200
+[debug] [2026-02-02T08:49:01.999Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo {"name":"projects/school-economydata/billingInfo","projectId":"school-economydata","billingAccountName":"","billingEnabled":false}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-02T08:49:02.006Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-02T08:49:02.006Z] > authorizing via signed-in user (remains0717@gmail.com)
+[debug] [2026-02-02T08:49:02.769Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo 200
+[debug] [2026-02-02T08:49:02.769Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/school-economydata/billingInfo {"name":"projects/school-economydata/billingInfo","projectId":"school-economydata","billingAccountName":"","billingEnabled":false}
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-02-02T08:49:02.778Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-02-02T08:49:02.778Z] > authorizing via signed-in user (remains0717@gmail.com)
