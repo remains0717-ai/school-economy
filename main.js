@@ -283,16 +283,24 @@ class AuthManager {
         const myInfoModal = document.getElementById('my-info-modal');
         if (!myInfoModal) return;
 
-        document.getElementById('info-username').textContent = this.currentUser.username;
-        document.getElementById('info-role').textContent = this.currentUser.role === 'admin' ? '관리자' : '학생';
+        const infoUsername = document.getElementById('info-username');
+        const infoRole = document.getElementById('info-role');
+        const infoEmailRow = document.getElementById('info-email-row');
+        const infoEmail = document.getElementById('info-email');
+        const infoClassCode = document.getElementById('info-class-code');
+
+        if (infoUsername) infoUsername.textContent = this.currentUser.username;
+        if (infoRole) infoRole.textContent = this.currentUser.role === 'admin' ? '관리자' : (this.currentUser.role === 'loading' ? '로딩 중...' : '학생');
         
-        const adminSection = document.getElementById('info-admin-section');
         if (this.currentUser.role === 'admin') {
-            if (adminSection) adminSection.classList.remove('hidden');
-            document.getElementById('info-email').textContent = auth.currentUser ? auth.currentUser.email : "";
-            document.getElementById('info-class-code').textContent = this.currentUser.classCode || '발급되지 않음';
+            if (infoEmailRow) infoEmailRow.classList.remove('hidden');
+            if (infoEmail) infoEmail.textContent = auth.currentUser ? auth.currentUser.email : "";
         } else {
-            if (adminSection) adminSection.classList.add('hidden');
+            if (infoEmailRow) infoEmailRow.classList.add('hidden');
+        }
+        
+        if (infoClassCode) {
+            infoClassCode.textContent = this.currentUser.classCode || '소속 없음';
         }
         
         myInfoModal.style.display = 'block';
@@ -302,7 +310,7 @@ class AuthManager {
         auth.onAuthStateChanged(async (user) => {
             console.log("Auth Status Changed:", user ? user.email : "No User");
             if (user) {
-                this.currentUser = { uid: user.uid, username: user.email.split('@')[0], role: 'loading' };
+                this.currentUser = { uid: user.uid, username: user.email.split('@')[0], role: 'loading', classCode: null };
                 this.updateUI();
 
                 try {
@@ -311,14 +319,18 @@ class AuthManager {
                         const userData = userDoc.data();
                         this.currentUser = { 
                             uid: user.uid, 
-                            username: userData.username, 
-                            role: userData.role,
+                            username: userData.username || user.email.split('@')[0], 
+                            role: userData.role || 'student',
                             classCode: userData.classCode || null
                         };
                         if (this.simulation) this.simulation.loadUserData(user.uid);
+                    } else {
+                        console.warn("User document missing. Fallback to student.");
+                        this.currentUser.role = 'student';
                     }
                 } catch (error) {
                     console.error("Firestore loading error:", error);
+                    this.currentUser.role = 'student';
                 }
             } else {
                 this.currentUser = null;
