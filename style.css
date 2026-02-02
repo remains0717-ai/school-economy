@@ -38,26 +38,41 @@ header {
 /* Sidebar Accordion */
 .sidebar { width: 260px; background-color: #1a1a1a; padding: 20px 0; border-right: 1px solid var(--border); }
 .sidebar ul { list-style: none; padding: 0; margin: 0; }
+.sidebar li { margin-bottom: 5px; } /* 메뉴 항목 간 간격 추가 */
+
 .sidebar a {
     color: var(--text-muted);
     text-decoration: none;
-    padding: 12px 25px;
+    padding: 14px 25px; /* 패딩 확대 */
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-left: 4px solid transparent;
     transition: 0.2s;
+    font-size: 1.05rem;
 }
 .sidebar a:hover, .sidebar a.active { background-color: #252525; color: white; border-left-color: var(--primary); }
 .sidebar a.active { font-weight: bold; color: var(--primary); }
 
-.sub-menu { max-height: 0; overflow: hidden; transition: 0.3s ease-out; background-color: #151515; }
-.menu-item.open .sub-menu { max-height: 500px; }
-.sub-menu a { padding-left: 45px; font-size: 0.95rem; }
+.sub-menu { max-height: 0; overflow: hidden; transition: 0.3s ease-in-out; background-color: #151515; }
+.menu-item.open .sub-menu { max-height: 500px; padding-bottom: 10px; }
+.sub-menu a { padding-left: 45px; font-size: 0.95rem; padding-top: 10px; padding-bottom: 10px; }
 
-.chevron { width: 8px; height: 8px; border-right: 2px solid #666; border-bottom: 2px solid #666; transform: rotate(-45deg); transition: 0.3s; }
-.menu-item.open .chevron { transform: rotate(45deg); }
-.menu-group { border-top: 1px solid var(--border); margin-top: 15px; padding-top: 10px; }
+/* 셰브론 화살표 아이콘 (바닐라 CSS) */
+.chevron::before {
+    content: '▶'; /* 기본 상태 */
+    font-size: 0.7rem;
+    color: #666;
+    transition: 0.3s;
+    display: inline-block;
+}
+.menu-item.open .chevron::before {
+    content: '▼'; /* 열린 상태 */
+    color: var(--primary);
+    transform: rotate(0deg);
+}
+
+.menu-group { border-top: 1px solid #333; margin-top: 20px; padding-top: 15px; }
 
 /* Modals */
 .modal {

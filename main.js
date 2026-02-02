@@ -230,21 +230,43 @@ class AuthManager {
 
 // Sidebar Accordion Toggle
 function setupNavigation() {
-    document.querySelectorAll('.parent-link').forEach(link => {
+    const menuItems = document.querySelectorAll('.menu-item');
+    const parentLinks = document.querySelectorAll('.parent-link');
+    const subLinks = document.querySelectorAll('.sub-menu a, #home-link');
+
+    // [1] 상위 메뉴 클릭 (아코디언 토글)
+    parentLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            link.parentElement.classList.toggle('open');
+            const currentItem = link.parentElement;
+            const isOpen = currentItem.classList.contains('open');
+
+            // 다른 모든 메뉴 닫기 (useState 효과)
+            menuItems.forEach(item => item.classList.remove('open'));
+
+            // 현재 메뉴가 닫혀있었다면 열기
+            if (!isOpen) {
+                currentItem.classList.add('open');
+            }
         });
     });
-    document.querySelectorAll('.sub-menu a, #home-link').forEach(link => {
+
+    // [2] 하위 메뉴 클릭 (페이지 전환)
+    subLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
+
+            // 액티브 상태 표시
             document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
             link.classList.add('active');
-            const target = document.getElementById(link.id.replace('-link', '-view'));
-            if (target) {
+
+            // 뷰 전환
+            const targetId = link.id.replace('-link', '-view');
+            const targetView = document.getElementById(targetId);
+
+            if (targetView) {
                 document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-                target.classList.add('active');
+                targetView.classList.add('active');
             }
         });
     });
