@@ -104,13 +104,18 @@
                 <li id="admin-menu" class="menu-item hidden menu-group">
                     <a href="#" id="class-mgmt-link" class="parent-link" style="color:#ff4d4d"><span>학급 운영</span><span class="chevron"></span></a>
                     <ul class="sub-menu">
-                        <li><a href="#" id="bank-main-link" style="color:#ffeb3b">중앙 은행 (통화 정책)</a></li>
                         <li><a href="#" id="shop-mgmt-link" style="color:var(--primary)">상점 관리</a></li>
                         <li><a href="#" id="account-mgmt-link">계정 관리</a></li>
                         <li><a href="#" id="job-mgmt-link">직업 관리</a></li>
                         <li><a href="#" id="asset-mgmt-link">자산 관리</a></li>
-                        <li><a href="#" id="treasury-link">학급 국고</a></li>
                         <li><a href="#" id="db-mgmt-link">데이터베이스 로그</a></li>
+                    </ul>
+                </li>
+                <li id="central-bank-menu" class="menu-item hidden menu-group">
+                    <a href="#" id="central-bank-parent-link" class="parent-link" style="color:#ffeb3b"><span>중앙 은행</span><span class="chevron"></span></a>
+                    <ul class="sub-menu">
+                        <li><a href="#" id="treasury-link">학급 국고</a></li>
+                        <li><a href="#" id="monetary-policy-link">통화 정책</a></li>
                     </ul>
                 </li>
             </ul>
@@ -156,8 +161,8 @@
                 </div>
             </div>
 
-            <!-- [2] 중앙 은행 (관리자 전용) -->
-            <div id="bank-main-view" class="view">
+            <!-- [2] 통화 정책 (관리자 전용) -->
+            <div id="monetary-policy-view" class="view">
                 <h2>중앙 은행 (통화 정책 관리)</h2>
                 <div class="asset-status" style="border-style: dashed;">
                     <h3>🏦 기준 금리 및 통화 정책 설정</h3>

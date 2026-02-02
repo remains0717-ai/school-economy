@@ -226,6 +226,7 @@ class AuthManager {
             document.getElementById('user-display-name').textContent = u.nickname || u.username;
             const isAdmin = u.role === 'admin';
             document.getElementById('admin-menu')?.classList.toggle('hidden', !isAdmin);
+            document.getElementById('central-bank-menu')?.classList.toggle('hidden', !isAdmin);
             
             // 관리자 전용 대시보드 컨트롤 표시
             document.getElementById('admin-treasury-controls')?.classList.toggle('hidden', !isAdmin);
