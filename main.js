@@ -131,6 +131,8 @@ class AuthManager {
         
         const baseRate = data.baseRate || 0;
         const maturityHours = data.maturityHours || 24;
+        const loanSpread = data.loanSpread || 2.0;
+        const bondSpread = data.bondSpread || 1.0;
 
         setEl('class-treasury', `₩${(data.treasury || 0).toLocaleString()}`);
         setEl('treasury-amount', (data.treasury || 0).toLocaleString());
@@ -139,14 +141,16 @@ class AuthManager {
         
         // 관리자 뷰 업데이트
         setEl('current-deposit-rate', baseRate);
-        setEl('current-loan-rate', (baseRate + 2).toFixed(1));
-        setEl('current-bond-rate', baseRate);
+        setEl('current-loan-rate', (baseRate + loanSpread).toFixed(1));
+        setEl('current-bond-rate', (baseRate + bondSpread).toFixed(1));
+        setEl('display-loan-spread', loanSpread);
+        setEl('display-bond-spread', bondSpread);
         setEl('current-maturity-display', maturityHours);
 
         // 학생 뷰 업데이트
         setEl('student-deposit-rate', `${baseRate}%`);
         setEl('student-maturity-hours', `${maturityHours}시간`);
-        setEl('display-loan-rate', `${(baseRate + 2).toFixed(1)}%`);
+        setEl('display-loan-rate', `${(baseRate + loanSpread).toFixed(1)}%`);
 
         if (data.news) {
             const tc = document.getElementById('news-ticker-container');
@@ -166,6 +170,8 @@ class AuthManager {
             if (data) {
                 document.getElementById('policy-base-rate').value = data.baseRate || 0;
                 document.getElementById('policy-maturity-hours').value = data.maturityHours || 24;
+                document.getElementById('policy-loan-spread').value = data.loanSpread || 2.0;
+                document.getElementById('policy-bond-spread').value = data.bondSpread || 1.0;
                 this.policyInitialized = true;
             }
         }
@@ -420,7 +426,9 @@ class EconomicSimulation {
         const grade = Math.max(1, Math.min(10, 11 - Math.floor((this.user.creditScore || 500) / 100)));
         const limit = (11 - grade) * 5000;
         const classData = window.userState.classData;
-        const loanRate = (classData.baseRate || 0) + 2;
+        const baseRate = classData.baseRate || 0;
+        const loanSpread = classData.loanSpread || 2.0;
+        const loanRate = baseRate + loanSpread;
 
         if (isNaN(amount) || amount <= 0) return alert("올바른 금액을 입력하세요.");
         if (amount > limit) return alert(`대출 한도를 초과했습니다 (현재 한도: ₩${limit.toLocaleString()})`);
@@ -465,16 +473,22 @@ window.adjustTreasury = async (mode) => {
 window.updateBankPolicy = async () => {
     const baseRate = parseFloat(document.getElementById('policy-base-rate').value);
     const maturityHours = parseInt(document.getElementById('policy-maturity-hours').value);
+    const loanSpread = parseFloat(document.getElementById('policy-loan-spread').value);
+    const bondSpread = parseFloat(document.getElementById('policy-bond-spread').value);
 
-    if (isNaN(baseRate) || isNaN(maturityHours)) return alert("올바른 값을 입력하세요.");
+    if (isNaN(baseRate) || isNaN(maturityHours) || isNaN(loanSpread) || isNaN(bondSpread)) {
+        return alert("모든 항목에 올바른 값을 입력하세요.");
+    }
 
     const classCode = window.userState.currentUser.classCode;
     try {
         await db.collection('classes').doc(classCode).update({
-            baseRate: baseRate,
-            maturityHours: maturityHours
+            baseRate,
+            maturityHours,
+            loanSpread,
+            bondSpread
         });
-        alert("통화 정책이 반영되었습니다.");
+        alert("통화 정책이 서버에 저장되었으며 실시간으로 반영됩니다.");
     } catch (err) {
         alert("정책 반영 실패: " + err.message);
     }

@@ -163,6 +163,14 @@
                             <label>예금 만기 기간 (시간 단위)</label>
                             <input type="number" id="policy-maturity-hours" placeholder="예: 24" style="margin-top:5px;">
                         </div>
+                        <div>
+                            <label>대출 가산 금리 (+%)</label>
+                            <input type="number" id="policy-loan-spread" placeholder="예: 2.0" step="0.1" style="margin-top:5px;">
+                        </div>
+                        <div>
+                            <label>국채 가산 금리 (+%)</label>
+                            <input type="number" id="policy-bond-spread" placeholder="예: 1.0" step="0.1" style="margin-top:5px;">
+                        </div>
                     </div>
                     <button onclick="window.updateBankPolicy()" class="submit-btn" style="margin-top: 20px; background: #ffeb3b; color: #1a1a1a;">정책 적용하기</button>
                 </div>
@@ -171,8 +179,8 @@
                     <div class="asset-status">
                         <h3>현재 적용 금리 현황</h3>
                         <p>예금 금리: <span id="current-deposit-rate" style="color:var(--primary)">0</span>%</p>
-                        <p>대출 금리: <span id="current-loan-rate" style="color:var(--danger)">0</span>% (기준+2%)</p>
-                        <p>국채 금리: <span id="current-bond-rate" style="color:#ffeb3b">0</span>%</p>
+                        <p>대출 금리: <span id="current-loan-rate" style="color:var(--danger)">0</span>% (기준+<span id="display-loan-spread">0</span>%)</p>
+                        <p>국채 금리: <span id="current-bond-rate" style="color:#ffeb3b">0</span>% (기준+<span id="display-bond-spread">0</span>%)</p>
                     </div>
                     <div class="asset-status">
                         <h3>만기 설정</h3>
